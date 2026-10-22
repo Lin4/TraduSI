@@ -36,6 +36,19 @@ const light = {
   border: "#E5E7EB",
   borderStrong: "#D1D5DB",
   divider: "#F3F4F6",
+
+  // valuation board groups (price vs intrinsic value) + intrinsic-value chart line
+  valueVeryUnder: "#047857",
+  valueVeryUnderBg: "#D1FAE5",
+  valueUnder: "#059669",
+  valueUnderBg: "#ECFDF5",
+  valueFair: "#475569",
+  valueFairBg: "#F1F5F9",
+  valueOver: "#B45309",
+  valueOverBg: "#FEF3C7",
+  valueVeryOver: "#B91C1C",
+  valueVeryOverBg: "#FEE2E2",
+  chartValue: "#2563EB",
 };
 
 export type ThemeColors = typeof light;

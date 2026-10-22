@@ -49,6 +49,30 @@ def _as_list(v) -> List:
     return v if isinstance(v, list) else [v] if v else []
 
 
+async def quote_detail(client: httpx.AsyncClient, symbol: str) -> Optional[Dict[str, float]]:
+    """One quote in the same shape as market.get_quote (used when Finnhub's per-minute budget is spent)."""
+    d = await _get(client, "/markets/quotes", {"symbols": symbol})
+    q = next(iter(_as_list(((d or {}).get("quotes") or {}).get("quote"))), None)
+    p = q and (q.get("last") or q.get("prevclose"))
+    if not p:
+        return None
+    f = lambda k: float(q.get(k) or 0)
+    return {"price": float(p), "change": f("change"), "change_pct": f("change_percentage"), "high": f("high") or float(p),
+            "low": f("low") or float(p), "open": f("open") or float(p), "prev_close": f("prevclose")}
+
+
+async def quotes(client: httpx.AsyncClient, symbols: List[str]) -> Dict[str, float]:
+    """Last trade price for many symbols, batched 150 per request. Missing/failed symbols are simply absent."""
+    out: Dict[str, float] = {}
+    for i in range(0, len(symbols), 150):
+        d = await _get(client, "/markets/quotes", {"symbols": ",".join(symbols[i:i + 150])})
+        for q in _as_list(((d or {}).get("quotes") or {}).get("quote")):
+            p = q.get("last") or q.get("prevclose")
+            if q.get("symbol") and p:
+                out[q["symbol"]] = float(p)
+    return out
+
+
 async def expirations(client: httpx.AsyncClient, symbol: str) -> List[str]:
     k = f"exp:{symbol}"
     hit = _cget(k, 6 * 3600)

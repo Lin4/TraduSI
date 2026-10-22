@@ -106,17 +106,20 @@ function Alerts() {
                 <Text style={styles.checkText}>{checking ? "Checking…" : "Check now"}</Text>
               </Pressable> : null}
             </View>
-            <Text style={styles.emptySub}>Setups checked every 30 min (max 3/day) · saved strategies every 5 min in market hours</Text>
-            {feed.map((e) => (
-              <Pressable key={e.event_id} testID={`feed-${e.event_id}`} onPress={() => e.kind?.startsWith("strategy_") ? router.push("/(tabs)/portfolio" as any) : router.push({ pathname: "/(tabs)/analyze", params: { ticker: e.ticker, strategy: e.strategy, range: e.expiration_days > 45 ? "3months" : e.expiration_days > 10 ? "month" : "week" } } as any)} style={styles.feedRow}>
-                <View style={styles.iconWrap}><Icon name={e.kind === "strategy_target" ? "target" : e.kind === "strategy_stop" ? "shield" : "zap"} size={16} color={e.kind === "strategy_stop" ? colors.error : e.kind === "strategy_target" ? colors.success : colors.brandPrimary} /></View>
+            <Text style={styles.emptySub}>Setups checked every 30 min (max 3/day) · saved strategies every 5 min · price alerts every 2 min in market hours</Text>
+            {feed.map((e) => {
+              const priceEvt = e.kind === "price_below" || e.kind === "price_above";
+              return (
+              <Pressable key={e.event_id} testID={`feed-${e.event_id}`} onPress={() => priceEvt ? router.push(`/ticker/${e.ticker}` as any) : e.kind?.startsWith("strategy_") ? router.push("/(tabs)/portfolio" as any) : router.push({ pathname: "/(tabs)/analyze", params: { ticker: e.ticker, strategy: e.strategy, range: e.expiration_days > 45 ? "3months" : e.expiration_days > 10 ? "month" : "week" } } as any)} style={styles.feedRow}>
+                <View style={styles.iconWrap}><Icon name={e.kind === "price_below" ? "trending-down" : e.kind === "price_above" ? "trending-up" : e.kind === "strategy_target" ? "target" : e.kind === "strategy_stop" ? "shield" : "zap"} size={16} color={e.kind === "strategy_stop" ? colors.error : e.kind === "strategy_target" ? colors.success : colors.brandPrimary} /></View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.rowTicker}>{e.title}</Text>
                   <Text style={styles.rowDesc}>{e.message} · {new Date(e.created_at).toLocaleString()}</Text>
                 </View>
                 <Icon name="chevron-right" size={16} color={colors.muted} />
               </Pressable>
-            ))}
+              );
+            })}
             {!feed.length ? <Text style={styles.rowDesc}>No setup alerts yet.</Text> : null}
           </View>
         ) : null}
@@ -128,10 +131,10 @@ function Alerts() {
             <View style={{ flex: 1 }}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                 <Text style={styles.rowTicker}>{it.ticker}</Text>
-                <Badge text={it.active ? "active" : "paused"} kind={it.active ? "success" : "info"} />
+                <Badge text={it.triggered_at ? "triggered" : it.active ? "active" : "paused"} kind={it.triggered_at ? "warn" : it.active ? "success" : "info"} />
               </View>
               <Text style={styles.rowDesc}>
-                {it.kind === "earnings" ? "Earnings approaching reminder" : it.kind === "smart_setup" ? `New 70%+ setups · ${PROFILE_OPTS.find((p) => p.id === it.note)?.label || "Low risk"}` : `${it.kind.replace("_", " ")} $${it.threshold}`}
+                {it.kind === "earnings" ? "Earnings approaching reminder" : it.kind === "smart_setup" ? `New 70%+ setups · ${PROFILE_OPTS.find((p) => p.id === it.note)?.label || "Low risk"}` : `${it.note ? `${it.note} · ` : ""}${it.kind.replace("_", " ")} $${it.threshold}${it.triggered_price ? ` · hit $${it.triggered_price}` : ""}`}
               </Text>
             </View>
             <Pressable testID={`alert-remove-${it.alert_id}`} onPress={() => remove(it.alert_id)} style={styles.removeBtn}>

@@ -183,3 +183,10 @@ Research-first, transparent, trust-driven AI intelligence platform. AI acts as a
 - Root cause: live Stripe account has charges_enabled=false and card_payments capability inactive -> Checkout Session.create fails ("No valid payment method types"). User must finish/activate the account in the Stripe Dashboard.
 - Also: ingress replaces backend 5xx bodies with an HTML page, so the app only showed "HTTP 502". Stripe checkout/cancel and PayPal errors now return 400 with a readable message.
 - Note: STRIPE_WEBHOOK_SECRET in backend/.env is empty (webhook endpoint returns 503 until set).
+
+## Update (Jun 2026) - S&P 500 Valuation Board + buy levels
+- backend/valuation_board.py + data/sp500.json (503 tickers, GICS). GET /api/valuation/board. Loops: fundamentals (daily, Finnhub-paced, collection valuation_board), prices (Tradier batch, 10 min), price alerts (price_above/below checked every 2 min in market hours -> triggered_at/triggered_price, alert_events, push).
+- Long-term stock-analysis adds intrinsic_line, buy_levels (B1-B4: 2y support clusters w/ 2+ bounces below min(price, IV), 10% step fill), price_history (2y).
+- Frontend: src/ValuationBoard.tsx (Analyze > Long-term), src/BuyLevelsChart.tsx (chart + "Buy alert" per level), alerts.tsx triggered state.
+- market.get_quote falls back to Tradier quote when Finnhub budget is spent.
+- First full board build ~1.5-2h after a backend restart (resumes from Mongo).

@@ -120,3 +120,10 @@
 - Backend: assistant.py + server.ai_ticker_context/ai_user_context; billing FEATURES ai_chat_per_day/ai_deep_per_day.
 - Frontend: app/assistant.tsx, src/assistant.ts, src/ChatParts.tsx, src/Markdown.tsx; entry buttons on Discover/Analyze/Portfolio; plans.tsx features.
 - needs_retesting: true
+
+## Iteration 27 (main agent) - S&P 500 valuation board + intrinsic-value buy levels + price-alert checker
+- Backend: valuation_board.py (new): data/sp500.json (503 tickers, GICS sector); GET /api/valuation/board (auth); background loops fundamentals_loop (daily, Finnhub-paced ~5 stocks/min, Mongo `valuation_board`), price_loop (Tradier batch quotes every 10 min), price_alert_loop (price_above/price_below alerts checked every 2 min in market hours -> alert deactivated with triggered_at/triggered_price, alert_events feed row, push). buy_levels(): 2y swing-low clusters (>=2 bounces) below min(price, intrinsic), filled with 10% steps.
+- server.py stock-analysis purpose=long now returns intrinsic_line {value, source}, buy_levels [B1..B4], price_history [[t, close]] (~2y); fill_balance_gaps + optiiq_sector shared with the board so values match.
+- tradier.quotes() batch helper; market.recent_calls().
+- Frontend: src/ValuationBoard.tsx (5 colored group tabs w/ counts, search, sector chips, 4-col chip grid, progress bar while building), src/BuyLevelsChart.tsx (SVG price line + intrinsic line + 4 buy levels, 6M/1Y/2Y, "Buy alert" -> POST /api/alerts/add price_below note "Buy level Bx"), analyze.tsx Long-term shows the board under the form; tapping a chip runs the long analysis. alerts.tsx shows triggered state + price events.
+- needs_retesting: true

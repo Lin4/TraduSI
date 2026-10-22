@@ -39,6 +39,8 @@ import tradier
 import chain
 import strategies
 import broadcasts
+import valuation_board
+from valuation_board import fill_balance_gaps, optiiq_sector, buy_levels
 from engine import (
     STRATEGIES, STRATEGY_META, PROFILES, ACCOUNT_TYPES, EXP_DAYS, MIN_POP_FLOOR, CREDIT_VARIANTS, LEVEL_NAMES, user_options_level,
     volatility_profile, build_idea, default_filters, passes, candidate_strategies, compact,
@@ -766,15 +768,15 @@ async def stock_analysis(req: StockAnalysisReq, authorization: Optional[str] = H
             except Exception as ex:
                 logger.warning(f"financials {tk}: {ex}")
                 financials = []
-        if financials and financials[-1].get("cash") is None and metrics.get("cash_per_share_q") and metrics.get("market_cap") and price:
-            financials[-1]["cash"] = metrics["cash_per_share_q"] * metrics["market_cap"] / price
-            financials[-1]["cash_estimated"] = True
-        if financials and financials[-1].get("equity") is None and metrics.get("book_value_per_share_q") and metrics.get("market_cap") and price:
-            last = financials[-1]
-            last["equity"] = metrics["book_value_per_share_q"] * metrics["market_cap"] / price
-            last["equity_estimated"] = True
+            history = await get_candles(client, tk, 504)  # ~2 years for the buy-level chart
+        if len(history) < len(candles):
+            history = candles
+        fill_balance_gaps(financials, metrics, price)
         dcf_in = default_dcf_inputs(metrics)
         valuation = dcf_valuation(price, eps, dcf_in["growth"], dcf_in["discount_pct"], dcf_in["terminal_pe"], dcf_in["weights"])
+        optiiq = optiiq_value(price, metrics, financials, optiiq_sector(tk, bundle.get("sector") or UNIVERSE_INDEX.get(tk, {}).get("sector")))
+        iv_line = (optiiq["value"], "OptiIQ Value") if optiiq.get("available") else \
+            ((valuation["weighted_value"], "Probability-weighted DCF") if valuation and valuation.get("weighted_value") else (None, None))
         resp = {
             "ticker": tk, "name": bundle["name"], "price": price, "purpose": "long", "candles": candles,
             "valuation": valuation, "valuation_inputs": dcf_in,
@@ -792,7 +794,10 @@ async def stock_analysis(req: StockAnalysisReq, authorization: Optional[str] = H
                 "market_cap", "enterprise_value", "trailing_pe", "forward_pe", "peg_ratio",
                 "price_to_sales", "price_to_book", "ev_to_revenue", "ev_to_ebitda")},
             "financials": financials,
-            "optiiq": optiiq_value(price, metrics, financials, bundle.get("sector") or UNIVERSE_INDEX.get(tk, {}).get("sector") or ""),
+            "optiiq": optiiq,
+            "intrinsic_line": {"value": iv_line[0], "source": iv_line[1]},
+            "buy_levels": buy_levels(history, price, iv_line[0]),
+            "price_history": [[c.get("t"), round(c["c"], 2)] for c in history],
             "financials_source": "SEC 10-Q/10-K filings via Finnhub (quarterly values derived from year-to-date figures)",
             "buy_point": valuation["buy_zone_below"] if valuation else None,
             "sell_point": valuation["sell_zone_above"] if valuation else None,
@@ -1203,6 +1208,9 @@ async def startup():
     asyncio.create_task(EXTRAS["track_loop"]())
     asyncio.create_task(EXTRAS["smart_loop"]())
     asyncio.create_task(STRATS["loop"]())
+    asyncio.create_task(BOARD["fundamentals_loop"]())
+    asyncio.create_task(BOARD["price_loop"]())
+    asyncio.create_task(BOARD["price_alert_loop"]())
     logger.info("TradeSI API ready")
 
 @app.on_event("shutdown")
@@ -1231,6 +1239,8 @@ chain.register(api_router, get_user=get_user_from_token, get_quote=get_quote)
 broadcasts.register(api_router, db=db, get_user=get_user_from_token, send_push=send_push, logger=logger)
 STRATS = strategies.register(api_router, db=db, get_user=get_user_from_token, get_quote=get_quote, send_push=send_push,
                              logger=logger, market_open_now=extras.market_open_now)
+BOARD = valuation_board.register(api_router, db=db, get_user=get_user_from_token, send_push=send_push,
+                                 market_open_now=extras.market_open_now, logger=logger)
 
 
 # ========== ASK AI (Claude) ==========

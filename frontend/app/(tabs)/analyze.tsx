@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
@@ -18,6 +18,8 @@ import { FinancialsChart, ValuationMeasures, PeerComparison, BalanceSheet, OptiI
 import { OptiScoreCard, PlanCard, ValidationCard, ScanCard, PipelineStrip } from "@/src/quality";
 import { money } from "@/src/quantcharts";
 import { AskAIButton } from "@/src/ChatParts";
+import { ValuationBoard } from "@/src/ValuationBoard";
+import { BuyLevelsChart } from "@/src/BuyLevelsChart";
 
 const STRATS = ["auto", "Cash Secured Put", "Covered Call", "Bull Put Spread", "Bear Call Spread", "Iron Condor", "Bull Call Spread", "Bear Put Spread", "Long Call Butterfly", "Long Call", "Long Put", "Long Straddle", "Long Strangle", "Sell Put", "Sell Call", "Short Strangle"];
 
@@ -42,6 +44,7 @@ function Analyze() {
   const [riskPct, setRiskPct] = useState("1");
   const [minRR, setMinRR] = useState("2");
   const plan = usePlan();
+  const scrollRef = useRef<ScrollView>(null);
   const params = useLocalSearchParams<{ ticker?: string; strategy?: string; range?: string }>();
 
   useEffect(() => {
@@ -102,6 +105,12 @@ function Analyze() {
     catch (e: any) { toast(e.message || "Failed", "error"); }
   };
 
+  const pickFromBoard = (tk: string) => {
+    setTicker(tk);
+    scrollRef.current?.scrollTo({ y: 0, animated: true });
+    run({ tk, l: "long" });
+  };
+
   const labs: { id: Lab; label: string }[] = [
     { id: "options", label: "Options Lab" },
     { id: "day", label: "Day" },
@@ -125,7 +134,7 @@ function Analyze() {
         </ScrollView>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+      <ScrollView ref={scrollRef} contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <View style={styles.filterCard}>
           <View style={{ flexDirection: "row", gap: spacing.sm, alignItems: "flex-end" }}>
             <View style={{ flex: 1 }}>
@@ -200,6 +209,7 @@ function Analyze() {
             {lab === "options" ? <OptionsLab r={data} /> : lab === "long" ? <LongForm r={data} /> : <ShortForm r={data} />}
           </View>
         )}
+        {lab === "long" ? <ValuationBoard onSelect={pickFromBoard} /> : null}
       </ScrollView>
       <ToastHost />
     </View>
@@ -531,6 +541,7 @@ function LongForm({ r }: { r: any }) {
         {r.confidence ? <Badge text={`${r.confidence} conf.`} kind="info" /> : null}
       </View>
       <OptiIQCard o={r.optiiq} />
+      <BuyLevelsChart r={r} />
       <ValuationEditor r={r} />
       <Text style={styles.sectionLabel}>Fundamentals</Text>
       <ValuationMeasures m={r.valuation_measures || {}} buy={r.buy_point} sell={r.sell_point} />

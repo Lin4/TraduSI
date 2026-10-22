@@ -12,6 +12,7 @@ import math
 from typing import Any, Dict, List, Optional
 import httpx
 
+import tradier
 logger = logging.getLogger("optiscreen.market")
 
 FINNHUB_KEY = os.environ.get("FINNHUB_API_KEY", "")
@@ -58,6 +59,12 @@ def _slot(url: str) -> bool:
     q.append(now)
     CALL_COUNTS[h] = CALL_COUNTS.get(h, 0) + 1
     return True
+
+
+def recent_calls(host: str) -> int:
+    """Calls made to `host` in the current rate window (background jobs use this to leave room for users)."""
+    now = time.time()
+    return sum(1 for t in _calls.get(host, []) if now - t < 61)
 
 
 async def _get(client: httpx.AsyncClient, url: str, params: dict | None = None) -> Optional[dict]:
@@ -141,7 +148,13 @@ async def get_quote(client: httpx.AsyncClient, ticker: str) -> Optional[Dict[str
         }
         _cache_set(key, q)
         return q
-    return _cache_get(key, 900.0)  # rate-limited / upstream error -> last good quote (<15 min)
+    stale = _cache_get(key, 900.0)  # rate-limited / upstream error -> last good quote (<15 min)
+    if stale is not None:
+        return stale
+    q = await tradier.quote_detail(client, ticker)
+    if q:
+        _cache_set(key, q)
+    return q
 
 
 # =========== CANDLES ===========
