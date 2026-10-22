@@ -178,3 +178,8 @@ Research-first, transparent, trust-driven AI intelligence platform. AI acts as a
 ## Update (Jun 2026) - Ask AI spacing + plan screen
 - Markdown.tsx: plain paragraphs no longer use flex:1 (caused large empty gaps on native iOS); only list-item text flexes.
 - upgrade.tsx: Apple IAP button shown only in real iOS builds (rcEnabled && !rcSimulated && iOS). Expo Go / web preview no longer show the simulated Test Store button; removed "(simulated)" copy. Stripe/PayPal still shown on web/Android/dev; hidden on iOS store builds (Apple 3.1.1).
+
+## Update (Jun 2026) - Stripe checkout "HTTP 502"
+- Root cause: live Stripe account has charges_enabled=false and card_payments capability inactive -> Checkout Session.create fails ("No valid payment method types"). User must finish/activate the account in the Stripe Dashboard.
+- Also: ingress replaces backend 5xx bodies with an HTML page, so the app only showed "HTTP 502". Stripe checkout/cancel and PayPal errors now return 400 with a readable message.
+- Note: STRIPE_WEBHOOK_SECRET in backend/.env is empty (webhook endpoint returns 503 until set).

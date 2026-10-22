@@ -239,7 +239,8 @@ def register(api_router, *, db, get_user: Callable, logger):
             )
         except stripe.StripeError as ex:
             logger.error(f"stripe checkout failed: {ex}")
-            raise HTTPException(status_code=502, detail="Card payments are temporarily unavailable. Please try again later.")
+            # 400 not 502: the ingress replaces 5xx bodies with an HTML page, hiding this message from the app
+            raise HTTPException(status_code=400, detail="Card payments are temporarily unavailable. Please try PayPal or try again later.")
         await db.payment_transactions.insert_one({
             "tx_id": f"tx_{uuid.uuid4().hex[:12]}", "provider": "stripe", "session_id": session.id,
             "user_id": user["user_id"], "plan": req.plan, "amount": PLAN_PRICES[req.plan], "currency": "usd",
@@ -296,7 +297,7 @@ def register(api_router, *, db, get_user: Callable, logger):
                 await _cancel_sub(sid)
             except Exception as ex:
                 logger.error(f"cancel subscription {sid} failed: {ex}")
-                raise HTTPException(status_code=502, detail="Couldn't cancel your Stripe subscription. Please try again.")
+                raise HTTPException(status_code=400, detail="Couldn't cancel your Stripe subscription. Please try again.")
         await db.users.update_one({"user_id": user["user_id"]}, {"$set": {"plan": "free", "plan_source": None, "plan_expires_at": None},
                                                                  "$unset": {"stripe_subscription_id": ""}})
         await log_plan_event(db, user["user_id"], "free", "user")

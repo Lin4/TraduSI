@@ -147,7 +147,7 @@ async def _paypal_token() -> str:
         )
         if r.status_code != 200:
             logger.error(f"PayPal token error: {r.status_code} {r.text[:200]}")
-            raise HTTPException(502, "PayPal auth failed")
+            raise HTTPException(400, "PayPal is unavailable right now. Please try again later.")
         return r.json()["access_token"]
 
 
@@ -178,7 +178,7 @@ async def paypal_create_order(plan: str, user_id: str) -> dict:
         )
     if r.status_code not in (200, 201):
         logger.error(f"PayPal create order: {r.status_code} {r.text[:200]}")
-        raise HTTPException(502, "PayPal order failed")
+        raise HTTPException(400, "PayPal order failed. Please try again.")
     data = r.json()
     approve_url = next((l["href"] for l in data.get("links", []) if l.get("rel") in ("approve", "payer-action")), None)
     return {"order_id": data["id"], "approve_url": approve_url, "plan": plan, "amount": price}
@@ -193,7 +193,7 @@ async def paypal_capture_order(order_id: str) -> dict:
         )
     if r.status_code not in (200, 201):
         logger.error(f"PayPal capture: {r.status_code} {r.text[:200]}")
-        raise HTTPException(502, "PayPal capture failed")
+        raise HTTPException(400, "PayPal payment could not be completed. Please try again.")
     data = r.json()
     status = data.get("status")
     pu = (data.get("purchase_units") or [{}])[0]
