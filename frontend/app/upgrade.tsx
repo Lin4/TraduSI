@@ -26,7 +26,8 @@ export default function Upgrade() {
   const [confirm, setConfirm] = useState<any>(null);
   const pendingSession = useRef<string | null>(null);
 
-  const showApple = rcEnabled && (Platform.OS === "ios" || Platform.OS === "web");
+  // Apple in-app purchase only in real iOS builds; Expo Go / web preview would only show a simulated Test Store button
+  const showApple = rcEnabled && !rcSimulated && Platform.OS === "ios";
   const showStripe = Platform.OS !== "ios" || __DEV__; // iPhone store builds use Apple in-app purchase
   const rcPackage = (sub.offerings?.current?.availablePackages || []).find((p: any) => PACKAGE_TIER[p.identifier] === selected);
 
@@ -68,7 +69,7 @@ export default function Upgrade() {
     setConfirm(null);
     try {
       await sub.purchase(rcPackage);
-      toast(`${selected} plan active${rcSimulated ? " (simulated)" : ""}`, "success");
+      toast(`${selected} plan active`, "success");
     } catch (e: any) {
       if (e?.userCancelled) return;
       toast(e?.message === "identity_not_ready" ? "Account not linked to App Store yet — try again in a moment" : e?.message || "Purchase failed", "error");
@@ -114,7 +115,7 @@ export default function Upgrade() {
         <Text style={styles.section}>Pay with</Text>
         {showApple ? (
           <View>
-            <Button testID="pay-apple" label={rcPackage ? `Subscribe with Apple · ${rcPackage.product.priceString}/mo${rcSimulated ? " (simulated)" : ""}` : "App Store options unavailable right now"}
+            <Button testID="pay-apple" label={rcPackage ? `Subscribe with Apple · ${rcPackage.product.priceString}/mo` : "App Store options unavailable right now"}
               onPress={() => setConfirm(rcPackage)} loading={sub.isPurchasing} disabled={!rcPackage || !sub.identityReady} />
             {!sub.identityReady && rcPackage ? <Text style={styles.warn}>Linking your account to the App Store…</Text> : null}
             <Pressable testID="restore-purchases" onPress={restore} style={styles.link}><Text style={styles.linkText}>Restore purchases</Text></Pressable>
@@ -134,7 +135,7 @@ export default function Upgrade() {
         <View style={styles.modalWrap}>
           <View style={styles.modal}>
             <Text style={styles.modalTitle}>Confirm subscription</Text>
-            <Text style={styles.featText}>{selected} · {confirm?.product?.priceString}/month{rcSimulated ? "\nTest Store — simulated purchase, no real charge." : ""}</Text>
+            <Text style={styles.featText}>{selected} · {confirm?.product?.priceString}/month</Text>
             <Button testID="confirm-apple" label="Subscribe" onPress={buyApple} />
             <Button testID="cancel-apple" label="Cancel" variant="ghost" onPress={() => setConfirm(null)} />
           </View>

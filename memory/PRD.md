@@ -174,3 +174,7 @@ Research-first, transparent, trust-driven AI intelligence platform. AI acts as a
 - Zip with screenshots + icons: /app/store-assets/TradeSI_App_Store_Assets.zip
 - App tweak: removed duplicate "OptiIQ Value" section label in Analyze > Long-term.
 - Screenshot frames upgraded to realistic iPhone mockups (titanium gradient edge, side buttons, Dynamic Island, home indicator) in compose_devices.py; zip refreshed.
+
+## Update (Jun 2026) - Ask AI spacing + plan screen
+- Markdown.tsx: plain paragraphs no longer use flex:1 (caused large empty gaps on native iOS); only list-item text flexes.
+- upgrade.tsx: Apple IAP button shown only in real iOS builds (rcEnabled && !rcSimulated && iOS). Expo Go / web preview no longer show the simulated Test Store button; removed "(simulated)" copy. Stripe/PayPal still shown on web/Android/dev; hidden on iOS store builds (Apple 3.1.1).

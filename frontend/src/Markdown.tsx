@@ -16,14 +16,14 @@ export function Markdown({ text, testID }: { text: string; testID?: string }) {
         if (b) return (
           <View key={i} style={s.li}>
             <Text style={s.dot}>•</Text>
-            <Text style={s.p}>{inline(b[1])}</Text>
+            <Text style={[s.p, s.liText]}>{inline(b[1])}</Text>
           </View>
         );
         const n = line.match(/^\s*(\d+)[.)]\s+(.*)/);
         if (n) return (
           <View key={i} style={s.li}>
             <Text style={s.num}>{n[1]}.</Text>
-            <Text style={s.p}>{inline(n[2])}</Text>
+            <Text style={[s.p, s.liText]}>{inline(n[2])}</Text>
           </View>
         );
         return <Text key={i} style={s.p}>{inline(line)}</Text>;
@@ -42,7 +42,9 @@ function inline(t: string) {
 
 const s = StyleSheet.create({
   h: { fontSize: 15, fontWeight: "800", color: colors.onSurface, marginTop: spacing.sm, marginBottom: 2 },
-  p: { flex: 1, fontSize: 14, lineHeight: 21, color: colors.onSurface },
+  // plain paragraphs must NOT flex: on native a column child with flex:1 grows into large empty gaps
+  p: { fontSize: 14, lineHeight: 21, color: colors.onSurface },
+  liText: { flex: 1 },
   b: { fontWeight: "800" },
   li: { flexDirection: "row", gap: 6, paddingLeft: 2, marginTop: 2 },
   dot: { fontSize: 14, lineHeight: 21, color: colors.brandPrimary, fontWeight: "900" },
