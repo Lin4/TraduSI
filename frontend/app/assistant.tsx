@@ -112,7 +112,7 @@ export default function Assistant() {
       </Pressable>
       <View style={{ flex: 1 }}>
         <Text style={styles.title}>Ask AI</Text>
-        <Text style={styles.subtitle} numberOfLines={1}>Answers from live TradeSI data · {MODE_LABEL[mode]}</Text>
+        <Text style={styles.subtitle} numberOfLines={1}>Answers from live TraduSI data · {MODE_LABEL[mode]}</Text>
       </View>
       {allowed ? (
         <>
@@ -135,7 +135,7 @@ export default function Assistant() {
           <View style={styles.lockBadge}><Icon name="zap" size={26} color={colors.brandPrimary} /></View>
           <Text style={styles.lockTitle}>Ask AI is part of Advance & Expert</Text>
           <Text style={styles.lockText}>
-            Chat with Claude about any ticker, strategy or your saved trades. Every answer uses TradeSI&apos;s live quotes, OptiScores, trade plans and backtests.
+            Chat with Claude about any ticker, strategy or your saved trades. Every answer uses TraduSI&apos;s live quotes, OptiScores, trade plans and backtests.
           </Text>
           <Button testID="chat-upgrade" label="See plans & upgrade" onPress={() => router.push("/upgrade" as any)} />
         </View>
@@ -212,7 +212,7 @@ export default function Assistant() {
               {busy ? <ActivityIndicator size="small" color={colors.onBrandPrimary} /> : <Icon name="arrow-up" size={20} color={colors.onBrandPrimary} />}
             </Pressable>
           </View>
-          <Text style={styles.disclaimer}>AI research, not financial advice. Numbers come from TradeSI&apos;s engine.</Text>
+          <Text style={styles.disclaimer}>AI research, not financial advice. Numbers come from TraduSI&apos;s engine.</Text>
         </View>
       </KeyboardAvoidingView>
 

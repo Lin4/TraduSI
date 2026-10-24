@@ -231,7 +231,7 @@ def register(api_router, *, db, get_user: Callable, logger):
                 mode="subscription",
                 line_items=[{"price_data": {"currency": "usd", "unit_amount": int(PLAN_PRICES[req.plan] * 100),
                                             "recurring": {"interval": "month"},
-                                            "product_data": {"name": f"TradeSI {req.plan.capitalize()}"}}, "quantity": 1}],
+                                            "product_data": {"name": f"TraduSI {req.plan.capitalize()}"}}, "quantity": 1}],
                 success_url=success, cancel_url=cancel,
                 customer_email=user.get("email"), client_reference_id=user["user_id"],
                 metadata={"user_id": user["user_id"], "plan": req.plan},
@@ -284,8 +284,8 @@ def register(api_router, *, db, get_user: Callable, logger):
 
     @api_router.get("/billing/stripe/return", response_class=HTMLResponse)
     async def stripe_return(session_id: Optional[str] = None, cancelled: Optional[str] = None):
-        msg = "Payment cancelled." if cancelled else "Payment received — return to TradeSI to finish activating your plan."
-        return HTMLResponse(f"<html><body style='font-family:sans-serif;text-align:center;padding:48px'><h2>TradeSI</h2><p>{msg}</p><p>You can close this window.</p></body></html>")
+        msg = "Payment cancelled." if cancelled else "Payment received — return to TraduSI to finish activating your plan."
+        return HTMLResponse(f"<html><body style='font-family:sans-serif;text-align:center;padding:48px'><h2>TraduSI</h2><p>{msg}</p><p>You can close this window.</p></body></html>")
 
     @api_router.post("/billing/downgrade")
     async def billing_downgrade(authorization: Optional[str] = Header(default=None)):

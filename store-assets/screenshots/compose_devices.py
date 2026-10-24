@@ -1,4 +1,4 @@
-"""Compose TradeSI App Store screenshots for every required device size.
+"""Compose TraduSI App Store screenshots for every required device size.
 
 Branded background + benefit headline + the real app screen (raw/<device>/*.png) inside a device frame.
 Output: final/<device folder>/NN_name.png (RGB, no alpha - App Store requirement).
@@ -13,7 +13,7 @@ FONT = Path.home() / ".fonts"
 ICON = ROOT.parent / "icon" / "individual" / "A_scan_lens_rounded.png"
 
 SHOTS = [
-    ("1_scan", "Find the best opportunities <g>instantly</g>", "TradeSI scans the market and surfaces the strongest ideas in seconds."),
+    ("1_scan", "Find the best opportunities <g>instantly</g>", "TraduSI scans the market and surfaces the strongest ideas in seconds."),
     ("2_rank", "Know which ideas are <g>worth it</g>", "Every idea gets a simple <span style=\"white-space:nowrap\">0–100</span> score for return, risk and fit."),
     ("3_plan", "A clear plan <g>before you trade</g>", "Entry, take-profit, stop and position size — in plain English."),
     ("4_validate", "See how it did <g>in the past</g>", "Backtests, costs and stress tests show the risks up front."),
@@ -92,7 +92,7 @@ p {{ text-wrap: balance; margin: {d['p']*0.6}px auto 0; max-width: {W*0.82}px; f
 </style></head><body><div class="c">
 <div class="blob1"></div><div class="blob2"></div>
 <div class="text" id="text">
-  <div class="brand"><img src="data:image/png;base64,{b64(ICON)}">TradeSI</div>
+  <div class="brand"><img src="data:image/png;base64,{b64(ICON)}">TraduSI</div>
   <h1>{headline}</h1>
   <p>{sub}</p>
 </div>

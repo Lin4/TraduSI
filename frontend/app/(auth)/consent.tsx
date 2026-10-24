@@ -33,12 +33,12 @@ export default function Consent() {
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
           <Text style={styles.step}>Step 3 of 3</Text>
           <Text style={styles.title}>Consent & disclosures</Text>
-          <Text style={styles.subtitle}>Required before you can use TradeSI's AI recommendations.</Text>
+          <Text style={styles.subtitle}>Required before you can use TraduSI's AI recommendations.</Text>
 
           <View style={styles.doc}>
             <Text style={styles.docTitle}>Risk disclosure</Text>
             <Text style={styles.docP}>
-              Trading options and stocks carries substantial risk. All recommendations provided by TradeSI are
+              Trading options and stocks carries substantial risk. All recommendations provided by TraduSI are
               for educational purposes and generated using AI models that may be inaccurate. You are solely
               responsible for your trading decisions and should consult a licensed advisor.
             </Text>

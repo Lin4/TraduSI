@@ -1,4 +1,4 @@
-"""Capture real TradeSI screens for each App Store device class.
+"""Capture real TraduSI screens for each App Store device class.
 
 usage: python capture_devices.py iphone|duo|ipad
   iphone : iPhone 6.3" Dynamic Island  402x874  @3x -> 1206x2622

@@ -190,3 +190,8 @@ Research-first, transparent, trust-driven AI intelligence platform. AI acts as a
 - Frontend: src/ValuationBoard.tsx (Analyze > Long-term), src/BuyLevelsChart.tsx (chart + "Buy alert" per level), alerts.tsx triggered state.
 - market.get_quote falls back to Tradier quote when Finnhub budget is spent.
 - First full board build ~1.5-2h after a backend restart (resumes from Mongo).
+
+## Update (Jun 2026) - Display name TraduSI
+- app.json "name" -> TraduSI (icon label). All in-app/backend copy TradeSI -> TraduSI (login, consent, Ask AI, assistant system prompt, Stripe/PayPal product names, buy-levels note). Bundle ID com.optiiq.app, slug and App Store config unchanged.
+- Store screenshots re-composed with TraduSI; zip renamed /app/store-assets/TraduSI_App_Store_Assets.zip.
+- EMAIL_FROM_NAME (email sender name) requested via secrets card to change to TraduSI.

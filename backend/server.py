@@ -1,4 +1,4 @@
-"""TradeSI backend - Option & Stock Screening."""
+"""TraduSI backend - Option & Stock Screening."""
 from fastapi import FastAPI, APIRouter, HTTPException, Header, Request, UploadFile, File
 from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
@@ -60,7 +60,7 @@ market.CANDLE_STORE = db.candle_cache  # daily bars survive restarts
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY', '')
 JWT_SECRET = os.environ.get('JWT_SECRET', 'dev-secret')
 
-app = FastAPI(title="TradeSI API")
+app = FastAPI(title="TraduSI API")
 api_router = APIRouter(prefix="/api")
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -1073,7 +1073,7 @@ async def push_test(req: PushTestReq, authorization: Optional[str] = Header(defa
         await send_push(
             recipients=[user["user_id"]],
             data={
-                "title": req.title or "TradeSI",
+                "title": req.title or "TraduSI",
                 "message": req.message or "Your daily top pick is ready - open to view",
                 "action_url": "/(tabs)",
             },
@@ -1211,7 +1211,7 @@ async def startup():
     asyncio.create_task(BOARD["fundamentals_loop"]())
     asyncio.create_task(BOARD["price_loop"]())
     asyncio.create_task(BOARD["price_alert_loop"]())
-    logger.info("TradeSI API ready")
+    logger.info("TraduSI API ready")
 
 @app.on_event("shutdown")
 async def shutdown():
@@ -1220,7 +1220,7 @@ async def shutdown():
 
 @api_router.get("/")
 async def root():
-    return {"service": "TradeSI API", "ok": True}
+    return {"service": "TraduSI API", "ok": True}
 
 
 async def _scan_for_user(user: Dict[str, Any], profile: str) -> Dict[str, Any]:

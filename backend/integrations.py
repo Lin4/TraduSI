@@ -164,11 +164,11 @@ async def paypal_create_order(plan: str, user_id: str) -> dict:
                 "intent": "CAPTURE",
                 "purchase_units": [{
                     "reference_id": f"{user_id}:{plan}",
-                    "description": f"TradeSI {plan.title()} plan - 1 month",
+                    "description": f"TraduSI {plan.title()} plan - 1 month",
                     "amount": {"currency_code": "USD", "value": price},
                 }],
                 "application_context": {
-                    "brand_name": "TradeSI",
+                    "brand_name": "TraduSI",
                     "shipping_preference": "NO_SHIPPING",
                     "user_action": "PAY_NOW",
                     "return_url": "https://optionscope.preview.emergentagent.com/paypal-return",

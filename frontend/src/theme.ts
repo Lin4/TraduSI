@@ -1,4 +1,4 @@
-// Design tokens for TradeSI. Light theme (iOS-Native Clean personality).
+// Design tokens for TraduSI. Light theme (iOS-Native Clean personality).
 import { useMemo } from "react";
 import { Appearance, StyleSheet, useColorScheme } from "react-native";
 

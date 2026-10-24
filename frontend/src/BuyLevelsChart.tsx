@@ -115,7 +115,7 @@ export function BuyLevelsChart({ r }: { r: any }) {
           </View>
         );
       })}
-      <Text style={s.note}>Buy alerts notify you when the price drops to a level (checked every 2 min in market hours) and show in the Alerts tab. TradeSI does not place orders. Research only, not investment advice.</Text>
+      <Text style={s.note}>Buy alerts notify you when the price drops to a level (checked every 2 min in market hours) and show in the Alerts tab. TraduSI does not place orders. Research only, not investment advice.</Text>
     </View>
   );
 }

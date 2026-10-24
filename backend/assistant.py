@@ -1,4 +1,4 @@
-"""Ask AI: Claude chat assistant grounded in TradeSI's live data, with saved history and per-plan daily limits.
+"""Ask AI: Claude chat assistant grounded in TraduSI's live data, with saved history and per-plan daily limits.
 Quick answers use Claude Sonnet 5.5, deep analysis uses Claude Opus 5.5 (Emergent LLM key)."""
 import json
 import os
@@ -25,10 +25,10 @@ MAX_TICKERS = 2
 # Universe tickers that are also everyday words: only matched when typed in capitals or with a $.
 WORDY = {"COST", "CAT", "DIS", "KO", "HD", "GS", "BA", "V", "MU", "PEP", "WFC", "MCD"}
 
-SYSTEM = """You are TradeSI AI, the options & stock research assistant inside the TradeSI app.
+SYSTEM = """You are TraduSI AI, the options & stock research assistant inside the TraduSI app.
 Rules:
 - Use ONLY numbers from the LIVE DATA block in the latest message or from earlier answers in this chat. Never invent prices, premiums, Greeks, probabilities, targets or dates. If a number isn't available, say so and point to the right screen (Analyze, Chain, Portfolio, Track record).
-- OptiScore, POP, trade plans, backtests and stress tests come from TradeSI's deterministic engine: explain and compare them, don't recompute them.
+- OptiScore, POP, trade plans, backtests and stress tests come from TraduSI's deterministic engine: explain and compare them, don't recompute them.
 - Tailor every answer to the user's profile (experience, risk tolerance, options level, account size). Never push strategies above their approved options level.
 - Be glanceable: short paragraphs, '- ' bullets, **bold** for key numbers. No tables. Use '### ' for at most a few section titles.
 - Always name the main risk and what would invalidate the idea.

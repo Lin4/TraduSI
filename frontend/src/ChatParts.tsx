@@ -23,7 +23,7 @@ export function MessageBubble({ m }: { m: ChatMsg }) {
     <View testID="chat-msg-ai" style={[s.bubble, s.ai]}>
       <View style={s.aiHead}>
         <View style={s.aiAvatar}><Icon name="zap" size={11} color={colors.onBrandPrimary} /></View>
-        <Text style={s.aiModel}>{m.model || "TradeSI AI"}</Text>
+        <Text style={s.aiModel}>{m.model || "TraduSI AI"}</Text>
       </View>
       {m.tickers?.length ? (
         <View style={s.chips}>

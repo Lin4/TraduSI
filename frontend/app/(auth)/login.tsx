@@ -62,16 +62,16 @@ export default function Login() {
             <View style={styles.logoBadge}>
               <Icon name="trending-up" size={28} color={colors.onBrandPrimary} />
             </View>
-            <Text style={styles.title}>TradeSI</Text>
+            <Text style={styles.title}>TraduSI</Text>
             <Text style={styles.subtitle}>AI-powered option & stock screening</Text>
           </View>
 
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>Sign in to TradeSI</Text>
+            <Text style={styles.cardTitle}>Sign in to TraduSI</Text>
             <View style={styles.hint} testID="login-brand-hint">
               <Icon name="info" size={14} color={colors.brandPrimary} />
               <Text style={styles.hintText}>
-                Use your TradeSI account — this is not your Expo account.
+                Use your TraduSI account — this is not your Expo account.
               </Text>
             </View>
             <Input testID="login-email" label="Email" value={email} onChangeText={setEmail} placeholder="you@example.com" keyboardType="email-address" />
