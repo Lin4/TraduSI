@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { View, Text, StyleSheet, Pressable, TextInput, FlatList, ActivityIndicator } from "react-native";
+import { View, Text, Pressable, TextInput, FlatList, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
@@ -11,7 +11,7 @@ import { MessageBubble, Suggestions, HistorySheet, ChatMsg } from "@/src/ChatPar
 import { usePlan } from "@/src/plans";
 import { Button } from "@/src/Button";
 import { ToastHost, toast } from "@/src/Toast";
-import { colors, spacing, radius } from "@/src/theme";
+import { colors, spacing, radius, themedStyles, useTheme } from "@/src/theme";
 
 type Mode = "quick" | "deep";
 const MODE_LABEL: Record<Mode, string> = { quick: "Claude Sonnet 5.5", deep: "Claude Opus 5.5" };
@@ -29,6 +29,7 @@ const suggestionsFor = (t?: string) => t ? [
 ];
 
 export default function Assistant() {
+  useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const plan = usePlan();
@@ -223,7 +224,7 @@ export default function Assistant() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   root: { flex: 1, backgroundColor: colors.surface },
   header: { flexDirection: "row", alignItems: "center", gap: spacing.xs, paddingHorizontal: spacing.sm, paddingBottom: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.divider },
   iconBtn: { width: 44, height: 44, alignItems: "center", justifyContent: "center", borderRadius: 22 },
@@ -250,4 +251,4 @@ const styles = StyleSheet.create({
   lockBadge: { alignSelf: "center", width: 56, height: 56, borderRadius: 28, backgroundColor: colors.brandSecondary, alignItems: "center", justifyContent: "center" },
   lockTitle: { fontSize: 22, fontWeight: "800", color: colors.onSurface, textAlign: "center" },
   lockText: { fontSize: 14, color: colors.muted, textAlign: "center", lineHeight: 20, marginBottom: spacing.md },
-});
+}));

@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, RefreshControl } from "react-native";
+import { View, Text, ScrollView, Pressable, RefreshControl } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
 import Icon from "@react-native-vector-icons/feather";
@@ -8,13 +8,14 @@ import { api } from "@/src/api";
 import { Badge } from "@/src/parts";
 import { LoadingSkeleton } from "@/src/charts";
 import { Stat } from "@/src/screen";
-import { colors, spacing, radius } from "@/src/theme";
+import { colors, spacing, radius, themedStyles, useTheme } from "@/src/theme";
 import { usePlan, LockedFeature } from "@/src/plans";
 import { CalibrationChart, EquityCurve, money } from "@/src/quantcharts";
 
 type Tab = "live" | "backtest";
 
 export default function TrackRecord() {
+  useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [data, setData] = useState<any>(null);
@@ -104,6 +105,7 @@ export default function TrackRecord() {
 }
 
 function Summary({ s }: { s: any }) {
+  useTheme();
   const diff = s.win_rate != null && s.avg_predicted_pop != null ? s.win_rate - s.avg_predicted_pop : null;
   return (
     <View>
@@ -123,6 +125,7 @@ function Summary({ s }: { s: any }) {
 }
 
 function Accuracy({ a }: { a: any }) {
+  useTheme();
   if (!a) return null;
   const good = a.calibration_error <= 5;
   const vtone = good ? colors.success : a.calibration_error > 12 ? colors.error : colors.warning;
@@ -152,6 +155,7 @@ function Accuracy({ a }: { a: any }) {
 }
 
 function CalibrationProgress({ cal }: { cal?: any }) {
+  useTheme();
   if (!cal) return null;
   const need = cal.min_results_per_bucket;
   return (
@@ -179,6 +183,7 @@ function CalibrationProgress({ cal }: { cal?: any }) {
 }
 
 function RiskAdjusted({ ra }: { ra: any }) {
+  useTheme();
   if (!ra) return null;
   return (
     <View testID="track-risk-adjusted">
@@ -199,6 +204,7 @@ function RiskAdjusted({ ra }: { ra: any }) {
 }
 
 function Buckets({ rows }: { rows: any[] }) {
+  useTheme();
   return (
     <View>
       <Text style={styles.section}>Predicted vs actual</Text>
@@ -216,6 +222,7 @@ function Buckets({ rows }: { rows: any[] }) {
 }
 
 function TradeRow({ t }: { t: any }) {
+  useTheme();
   return (
     <View style={styles.row}>
       <View style={{ flex: 1 }}>
@@ -227,7 +234,7 @@ function TradeRow({ t }: { t: any }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   header: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingHorizontal: spacing.lg, paddingBottom: spacing.md },
   back: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.surfaceTertiary, alignItems: "center", justifyContent: "center" },
   title: { fontSize: 20, fontWeight: "800", color: colors.onSurface, letterSpacing: -0.5 },
@@ -262,4 +269,4 @@ const styles = StyleSheet.create({
   calText: { fontSize: 12, color: colors.onSurfaceSecondary, lineHeight: 17 },
   verdictPill: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", borderWidth: 1, borderRadius: radius.pill, paddingHorizontal: spacing.md, paddingVertical: 4 },
   verdictPillText: { fontSize: 12, fontWeight: "800" },
-});
+}));

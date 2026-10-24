@@ -1,11 +1,11 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, Pressable, Switch } from "react-native";
+import { View, Text, Pressable, Switch } from "react-native";
 import Slider from "@react-native-community/slider";
 import Icon from "@react-native-vector-icons/feather";
 
 import { Input } from "./Input";
 import { MetricRow, Badge } from "./parts";
-import { colors, spacing, radius } from "./theme";
+import { colors, spacing, radius, themedStyles, useTheme } from "./theme";
 import { LockedFeature } from "./plans";
 
 export type ProfileId = "low_low" | "low_high" | "high_high";
@@ -51,6 +51,7 @@ export const filtersPayload = (f: Filters) => ({
 });
 
 export function Chips({ options, value, onChange, testKey }: { options: { id: string; label: string }[]; value: string; onChange: (v: string) => void; testKey: string }) {
+  useTheme();
   return (
     <View style={s.chipsWrap}>
       {options.map((o) => {
@@ -66,10 +67,12 @@ export function Chips({ options, value, onChange, testKey }: { options: { id: st
 }
 
 export function Label({ children }: { children: React.ReactNode }) {
+  useTheme();
   return <Text style={s.label}>{children}</Text>;
 }
 
 export function ProfilePicker({ value, onChange, locked = {} }: { value: ProfileId; onChange: (p: ProfileId) => void; locked?: Record<string, boolean> }) {
+  useTheme();
   return (
     <View style={{ gap: spacing.sm, marginBottom: spacing.md }}>
       {(Object.keys(PROFILE_INFO) as ProfileId[]).map((id) => {
@@ -85,7 +88,7 @@ export function ProfilePicker({ value, onChange, locked = {} }: { value: Profile
               <Text style={s.profileTitle}>{p.title}</Text>
               <Text style={s.profileSub}>{p.sub}</Text>
             </View>
-            <Icon name={isLocked ? "lock" : active ? "check-circle" : "circle"} size={18} color={active ? colors.brandPrimary : colors.borderStrong} />
+            <Icon name={isLocked ? "lock" : active ? "check-circle" : "circle"} size={18} color={active ? colors.brandPrimary : colors.onSurfaceTertiary} />
           </Pressable>
         );
       })}
@@ -95,6 +98,7 @@ export function ProfilePicker({ value, onChange, locked = {} }: { value: Profile
 }
 
 export function SliderRow({ label, value, min, max, step, suffix = "", onChange, testID }: { label: string; value: number; min: number; max: number; step: number; suffix?: string; onChange: (v: number) => void; testID: string }) {
+  useTheme();
   return (
     <View style={{ marginBottom: spacing.sm }}>
       <View style={s.sliderHead}>
@@ -119,6 +123,7 @@ export function SliderRow({ label, value, min, max, step, suffix = "", onChange,
 
 /** Account + sliders shared by Discover (and partly Analyze). */
 export function FilterPanel({ f, set }: { f: Filters; set: (p: Partial<Filters>) => void }) {
+  useTheme();
   const [open, setOpen] = useState(false);
   return (
     <View>
@@ -161,6 +166,7 @@ const money = (v: number | null | undefined) => (v == null ? "—" : `$${Number(
 
 /** Deterministic engine details for one option idea. */
 export function OptionInsights({ r, collateralLocked = false }: { r: any; collateralLocked?: boolean }) {
+  useTheme();
   const v = r.volatility || {};
   const l = r.liquidity || {};
   const e = r.events || {};
@@ -246,6 +252,7 @@ export function OptionInsights({ r, collateralLocked = false }: { r: any; collat
 }
 
 function Bullet({ icon, color, text }: { icon: any; color: string; text: string }) {
+  useTheme();
   return (
     <View style={s.bullet}>
       <Icon name={icon} size={12} color={color} style={{ marginTop: 3 }} />
@@ -255,6 +262,7 @@ function Bullet({ icon, color, text }: { icon: any; color: string; text: string 
 }
 
 export function Stat({ label, value, tone }: { label: string; value: string; tone?: "good" | "bad" }) {
+  useTheme();
   return (
     <View style={s.stat}>
       <Text style={s.statLabel}>{label}</Text>
@@ -263,7 +271,7 @@ export function Stat({ label, value, tone }: { label: string; value: string; ton
   );
 }
 
-const s = StyleSheet.create({
+const s = themedStyles((colors) => ({
   label: { fontSize: 12, color: colors.muted, fontWeight: "700", textTransform: "uppercase", letterSpacing: 1, marginBottom: spacing.sm },
   chipsWrap: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginBottom: spacing.md },
   chip: { paddingHorizontal: spacing.md, minHeight: 36, borderRadius: radius.pill, backgroundColor: colors.surfaceTertiary, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
@@ -298,4 +306,4 @@ const s = StyleSheet.create({
   stat: { flexGrow: 1, flexBasis: "22%", backgroundColor: colors.surfaceSecondary, padding: spacing.sm, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, alignItems: "center" },
   statLabel: { fontSize: 9, color: colors.muted, textTransform: "uppercase", letterSpacing: 0.5, fontWeight: "700" },
   statVal: { fontSize: 14, fontWeight: "800", color: colors.onSurface, marginTop: 2, fontVariant: ["tabular-nums"] },
-});
+}));

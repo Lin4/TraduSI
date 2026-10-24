@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, Pressable, ScrollView } from "react-native";
+import { View, Text, Pressable, ScrollView } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Icon from "@react-native-vector-icons/feather";
 
@@ -7,7 +7,7 @@ import { useAuth } from "@/src/auth";
 import { api } from "@/src/api";
 import { Button } from "@/src/Button";
 import { ToastHost, toast } from "@/src/Toast";
-import { colors, spacing, radius } from "@/src/theme";
+import { colors, spacing, radius, themedStyles, useTheme } from "@/src/theme";
 import { PLAN_CARDS } from "@/src/plans";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
@@ -17,6 +17,7 @@ const PLANS = [
 ];
 
 export default function PlanScreen() {
+  useTheme();
   const insets = useSafeAreaInsets();
   const { user, refresh } = useAuth();
   const [selected, setSelected] = useState<string>(user?.plan || "free");
@@ -81,7 +82,7 @@ export default function PlanScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   root: { flex: 1, backgroundColor: colors.surface },
   scroll: { paddingHorizontal: spacing.xl, paddingBottom: 120 },
   step: { color: colors.brandPrimary, fontWeight: "700", marginTop: spacing.lg, fontSize: 12, letterSpacing: 1 },
@@ -104,4 +105,4 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl, paddingTop: spacing.md,
     backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border,
   },
-});
+}));

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { View, Text, StyleSheet, Pressable, ActivityIndicator, Platform } from "react-native";
+import { View, Text, Pressable, ActivityIndicator, Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { WebView } from "react-native-webview";
@@ -8,11 +8,12 @@ import Icon from "@react-native-vector-icons/feather";
 import { api } from "@/src/api";
 import { useAuth } from "@/src/auth";
 import { ToastHost, toast } from "@/src/Toast";
-import { colors, spacing, radius } from "@/src/theme";
+import { colors, spacing, radius, themedStyles, useTheme } from "@/src/theme";
 
 const RETURN_HOST = "optionscope.preview.emergentagent.com";
 
 export default function PaypalCheckout() {
+  useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { refresh } = useAuth();
@@ -142,7 +143,7 @@ export default function PaypalCheckout() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   header: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingHorizontal: spacing.lg, paddingBottom: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.divider },
   back: { width: 36, height: 36, borderRadius: radius.pill, backgroundColor: colors.surfaceTertiary, alignItems: "center", justifyContent: "center" },
   title: { fontSize: 18, fontWeight: "800", color: colors.onSurface, letterSpacing: -0.5 },
@@ -152,4 +153,4 @@ const styles = StyleSheet.create({
   ctaText: { color: colors.onBrandPrimary, fontWeight: "700" },
   secondaryBtn: { paddingHorizontal: spacing.xl, paddingVertical: spacing.md, borderRadius: radius.md, marginTop: spacing.sm, borderWidth: 1, borderColor: colors.border },
   secondaryText: { color: colors.brandPrimary, fontWeight: "700" },
-});
+}));

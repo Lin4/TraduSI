@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable } from "react-native";
+import { View, Text, ScrollView, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import Icon from "@react-native-vector-icons/feather";
@@ -8,7 +8,7 @@ import { useAuth } from "@/src/auth";
 import { api } from "@/src/api";
 import { Button } from "@/src/Button";
 import { ToastHost, toast } from "@/src/Toast";
-import { colors, spacing, radius } from "@/src/theme";
+import { colors, spacing, radius, themedStyles, useTheme, useThemePreference, setThemePreference, type ThemePreference } from "@/src/theme";
 import { usePlan, tierLabel, PLAN_CARDS } from "@/src/plans";
 import { MetricRow } from "@/src/parts";
 import { LoadingSkeleton } from "@/src/charts";
@@ -20,8 +20,14 @@ const Q_FIELDS: [string, string][] = [
   ["experience", "Experience"], ["risk_tolerance", "Risk tolerance"], ["capital", "Capital"],
   ["account_type", "Account type"], ["options_level", "Options level"],
 ];
+const THEME_OPTS: { id: ThemePreference; label: string; icon: string }[] = [
+  { id: "system", label: "System", icon: "smartphone" },
+  { id: "light", label: "Light", icon: "sun" },
+  { id: "dark", label: "Dark", icon: "moon" },
+];
 
 export default function Profile() {
+  useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user, refresh, signOut } = useAuth();
@@ -151,6 +157,9 @@ export default function Profile() {
           </>
         ) : null}
 
+        <Text style={styles.section}>Appearance</Text>
+        <ThemePicker />
+
         <Text style={styles.section}>Notifications</Text>
         <Pressable testID="push-test-btn" onPress={testPush} disabled={pushBusy} style={styles.pushRow}>
           <Icon name="bell" size={18} color={colors.brandPrimary} />
@@ -178,7 +187,30 @@ export default function Profile() {
   );
 }
 
+function ThemePicker() {
+  useTheme();
+  const pref = useThemePreference();
+  return (
+    <>
+      <View testID="theme-picker" accessibilityRole="radiogroup" style={styles.segment}>
+        {THEME_OPTS.map((o) => {
+          const on = pref === o.id;
+          return (
+            <Pressable key={o.id} testID={`theme-picker-${o.id}`} onPress={() => setThemePreference(o.id)} accessibilityRole="radio"
+              accessibilityState={{ checked: on }} style={[styles.segItem, on && styles.segItemOn]}>
+              <Icon name={o.icon as any} size={15} color={on ? colors.onSurface : colors.muted} />
+              <Text style={[styles.segText, on && styles.segTextOn]}>{o.label}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+      <Text style={styles.hint}>System follows your phone&apos;s light or dark setting.</Text>
+    </>
+  );
+}
+
 function Row({ icon, label, done }: { icon: string; label: string; done: boolean }) {
+  useTheme();
   return (
     <View style={styles.rowItem}>
       <Icon name={icon as any} size={16} color={done ? colors.success : colors.muted} />
@@ -188,7 +220,7 @@ function Row({ icon, label, done }: { icon: string; label: string; done: boolean
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   header: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingHorizontal: spacing.lg, paddingBottom: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.divider },
   planCard: { borderColor: colors.brandPrimary, backgroundColor: colors.brandSecondary },
   planName: { fontSize: 20, fontWeight: "800", color: colors.onBrandSecondary, letterSpacing: -0.3 },
@@ -224,4 +256,9 @@ const styles = StyleSheet.create({
   changeText: { flex: 1, color: colors.brandPrimary, fontSize: 14, fontWeight: "700" },
   googleNote: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.divider, paddingTop: spacing.md },
   googleNoteText: { flex: 1, color: colors.muted, fontSize: 12 },
-});
+  segment: { flexDirection: "row", gap: 4, padding: 4, borderRadius: radius.pill, backgroundColor: colors.surfaceTertiary },
+  segItem: { flex: 1, height: 44, borderRadius: radius.pill, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
+  segItemOn: { backgroundColor: colors.surface, boxShadow: "0px 1px 3px rgba(0,0,0,0.18)" },
+  segText: { fontSize: 13, fontWeight: "600", color: colors.muted },
+  segTextOn: { color: colors.onSurface, fontWeight: "700" },
+}));

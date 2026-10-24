@@ -1,0 +1,36 @@
+{
+  "summary": "Dark theme + Appearance picker + OptiIQ sanity guard tested. Backend 4/4 pass (BRK.B optiiq unavailable with the exact reason; AAPL/MSFT available; valuation board has no BRK.B/SKYD in stocks). Frontend: Profile > Appearance (theme-picker System/Light/Dark) switches the whole app straight away with no reload. The choice is saved in localStorage 'theme_preference' and survives a reload (dark->dark, light->light, system->system). System follows prefers-color-scheme, including live OS changes (emulate_media). Tabs that were already open (Discover/Analyze/Chain/Portfolio/Alerts/Learn) and the tab bar re-render in the new theme. I ran an automated contrast/leftover-light-background scan (/app/tests/contrast_scan.js) in dark mode on: Login, Profile, Discover (Best opportunities + scan results, Find stocks), Analyze (Options Lab AAPL, Swing AAPL, Long-term MSFT incl. DCF inputs, valuation-board, buy-levels after vb-stock-CNC), Chain, Portfolio, Alerts + add-alert modal, Learn + lesson/1 quiz, /track-record (live + backtest), /upgrade, /assistant, /ticker/AAPL, /admin, admin user detail, /admin-broadcast. No leftover light backgrounds and no page errors. Only 1 real unreadable-text bug: the Options Lab POP hero value was black on #1C1C1E (heroVal style had no color). I fixed it. Light mode regression looks unchanged.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Analyze Options Lab hero POP value", "issue": "Dark mode: '72.6%' POP value text was default black on dark card (styles.heroVal had no color; only Max profit/loss overrode it). FIXED by adding color: colors.onSurface to heroVal in app/(tabs)/analyze.tsx. Verified it is now white.", "testID": "hero-pop", "priority": "HIGH (fixed)"},
+      {"component": "Ticker detail price chart", "issue": "Pre-existing, both themes: the /ticker/AAPL chart y-axis runs from $0 to $352, so all candles are squashed into a thin line at the top. The min bound probably includes 0 or an empty/zero data point.", "testID": "ticker chart (/ticker/[symbol])", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Discover (dark)", "issues": ["Unselected radio circles on profile-low_high / profile-high_high use borderStrong #545456 on #000 (contrast 2.78:1, below the 3:1 non-text guideline). Consider muted #8E8E93."]},
+      {"screen": "Alerts add-alert modal (dark)", "issues": ["Bottom sheet background is #000, the same as the screen. Under the scrim only the rounded corners separate it from the page. iOS dark convention for elevated sheets is surfaceSecondary (#1C1C1E)."]},
+      {"screen": "Profile Appearance picker", "issues": ["Segment items are 40px tall (<44pt touch target).", "Items use accessibilityRole='radio' with accessibilityState={{selected}}, so aria-checked is never set. Use accessibilityState={{ checked: on }}."]},
+      {"screen": "Light mode (pre-existing)", "issues": ["muted #9CA3AF text on white/#F9FAFB is ~2.5:1 (section labels, 'Hi, Jane', hints). Not a regression."]}
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_iter28_optiiq_guard.py", "/app/test_reports/pytest/pytest_iter28.xml", "/app/tests/contrast_scan.js"],
+  "action_items": [
+    "Fix /ticker/[symbol] price chart y-axis lower bound ($0), which squashes the candles (pre-existing).",
+    "Dark mode polish: use surfaceSecondary for bottom-sheet modals (add-alert) and give the unselected radio rings more contrast.",
+    "Theme picker: accessibilityState={{ checked: on }} and minHeight 44."
+  ],
+  "critical_code_review_comments": [
+    "theme.ts design is sound: useSyncExternalStore store + per-scheme cached StyleSheet proxies. No React.memo components were found that could miss re-renders. No hard-coded hex/white/black colors remain in app/ or src/ .tsx files.",
+    "Any Text style without an explicit color falls back to black on web, which caused the heroVal bug. Worth a grep for other text styles that lack 'color' (my DOM scan only covers rendered states).",
+    "SVG chart texts (buy-levels-chart, track-calibration-chart, track-equity) use fill, so they look fine in screenshots. The scan's 1.23 ratios for these are false positives."
+  ],
+  "updated_files": ["/app/frontend/app/(tabs)/analyze.tsx (heroVal color)", "/app/backend/tests/test_iter28_optiiq_guard.py (new)", "/app/tests/contrast_scan.js (new)"],
+  "success_rate": {"backend": "100%", "frontend": "97% (1 dark-mode text bug found and fixed; 1 pre-existing chart bug)"},
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Theme pref is in localStorage 'theme_preference'. It is only applied at app launch, so set it then reload/goto. Reuse /app/tests/contrast_scan.js via page.evaluate(open(path).read()); ignore empty-text icon hits and 1.23 hits from SVG text. Day lab is locked for the advance user (redirects to /upgrade). Set EXPO_BACKEND_URL from EXPO_PUBLIC_BACKEND_URL before running pytest.",
+  "rca_of_issue": "hero-pop: styles.heroVal (analyze.tsx) set no color; RN-web defaults Text to black. In light mode this was invisible as a problem; in dark mode it became black on #1C1C1E."
+}

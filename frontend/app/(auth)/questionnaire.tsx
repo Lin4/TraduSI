@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, KeyboardAvoidingView, Platform } from "react-native";
+import { View, Text, ScrollView, Pressable, KeyboardAvoidingView, Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 
@@ -7,7 +7,7 @@ import { useAuth } from "@/src/auth";
 import { api } from "@/src/api";
 import { Button } from "@/src/Button";
 import { ToastHost, toast } from "@/src/Toast";
-import { colors, spacing, radius } from "@/src/theme";
+import { spacing, radius, themedStyles, useTheme } from "@/src/theme";
 
 type Multi = { id: string; q: string; opts: string[] };
 type Single = { id: string; q: string; opts: string[] };
@@ -42,6 +42,7 @@ const SINGLES: Single[] = [
 ];
 
 export default function Questionnaire() {
+  useTheme();
   const insets = useSafeAreaInsets();
   const { refresh, user } = useAuth();
   const router = useRouter();
@@ -113,6 +114,7 @@ export default function Questionnaire() {
 }
 
 function MultiBlock({ q, value, onToggle, optional }: { q: Multi; value: string[]; onToggle: (v: string) => void; optional?: boolean }) {
+  useTheme();
   return (
     <View>
       <Text style={styles.qlabel}>{q.q}{optional ? " " : ""}{optional ? <Text style={styles.opt_}>(optional)</Text> : null}</Text>
@@ -130,7 +132,7 @@ function MultiBlock({ q, value, onToggle, optional }: { q: Multi; value: string[
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   root: { flex: 1, backgroundColor: colors.surface },
   scroll: { padding: spacing.xl, paddingBottom: 140 },
   step: { color: colors.brandPrimary, fontWeight: "700", fontSize: 12, letterSpacing: 1 },
@@ -145,4 +147,4 @@ const styles = StyleSheet.create({
   optTextActive: { color: colors.onBrandPrimary },
   disclaimer: { color: colors.muted, fontSize: 11, marginTop: spacing.xl, fontStyle: "italic", textAlign: "center", lineHeight: 16 },
   footer: { position: "absolute", left: 0, right: 0, bottom: 0, paddingHorizontal: spacing.xl, paddingTop: spacing.md, backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border },
-});
+}));

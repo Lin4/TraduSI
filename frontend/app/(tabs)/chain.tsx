@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, ActivityIndicator, RefreshControl } from "react-native";
+import { View, Text, ScrollView, Pressable, TextInput, ActivityIndicator, RefreshControl } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Icon from "@react-native-vector-icons/feather";
 
@@ -10,7 +10,7 @@ import { PlanGate } from "@/src/plans";
 import { PnLChart, PnLHeatmap, money } from "@/src/pnl";
 import { Button } from "@/src/Button";
 import { SaveStrategySheet } from "@/src/SaveStrategy";
-import { colors, spacing, radius } from "@/src/theme";
+import { colors, spacing, radius, themedStyles, useTheme } from "@/src/theme";
 
 type Side = { bid: number; ask: number; mid: number | null; iv: number | null; delta: number | null; oi: number; volume: number } | null;
 type Row = { strike: number; call: Side; put: Side };
@@ -21,10 +21,12 @@ const TEMPLATES = ["Bull Call Spread", "Bear Put Spread", "Bull Put Spread", "Be
   "Calendar Call Spread", "Calendar Put Spread", "Diagonal Call Spread", "Diagonal Put Spread"];
 
 export default function ChainGated() {
+  useTheme();
   return <PlanGate><ChainScreen /></PlanGate>;
 }
 
 function ChainScreen() {
+  useTheme();
   const insets = useSafeAreaInsets();
   const [input, setInput] = useState("AAPL");
   const [ticker, setTicker] = useState("AAPL");
@@ -175,6 +177,7 @@ function ChainTable({ rows, price, loading, onTap, showAll, toggleAll }: {
   rows: Row[]; price?: number; loading: boolean; onTap: (a: "Buy" | "Sell", t: "Call" | "Put", r: Row) => void;
   showAll: boolean; toggleAll: () => void;
 }) {
+  useTheme();
   if (loading && !rows.length) return <ActivityIndicator style={{ marginTop: spacing["2xl"] }} color={colors.brandPrimary} />;
   if (!rows.length) return <Text style={st.empty}>No chain loaded.</Text>;
   const Cell = ({ v, onPress, itm, id, kind }: { v?: number; onPress: () => void; itm: boolean; id: string; kind: "bid" | "ask" }) => (
@@ -225,6 +228,7 @@ function Builder({ ticker, exp, tplName, legs, setLegs, analysis, analyzing, app
   ticker: string; exp: string | null; tplName: string | null; legs: Leg[]; setLegs: React.Dispatch<React.SetStateAction<Leg[]>>; analysis: any; analyzing: boolean;
   applyTemplate: (t: string) => void; tplLoading: string | null; goChain: () => void;
 }) {
+  useTheme();
   const setQty = (i: number, d: number) => setLegs((p) => p.map((l, j) => (j === i ? { ...l, qty: Math.max(1, Math.min(100, l.qty + d)) } : l)));
   const remove = (i: number) => setLegs((p) => p.filter((_, j) => j !== i));
   const a = analysis;
@@ -303,6 +307,7 @@ function Builder({ ticker, exp, tplName, legs, setLegs, analysis, analyzing, app
 }
 
 function Kpi({ label, value, color }: { label: string; value: string; color?: string }) {
+  useTheme();
   return (
     <View style={st.kpi}>
       <Text style={st.kpiLabel}>{label}</Text>
@@ -311,7 +316,7 @@ function Kpi({ label, value, color }: { label: string; value: string; color?: st
   );
 }
 
-const st = StyleSheet.create({
+const st = themedStyles((colors) => ({
   root: { flex: 1, backgroundColor: colors.surface },
   header: { paddingHorizontal: spacing.lg, paddingTop: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border },
   title: { fontSize: 28, fontWeight: "800", color: colors.onSurface, letterSpacing: -0.5, marginBottom: spacing.md },
@@ -371,4 +376,4 @@ const st = StyleSheet.create({
   kpiLabel: { fontSize: 10, color: colors.muted, fontWeight: "700" },
   kpiValue: { fontSize: 15, fontWeight: "800", color: colors.onSurface, marginTop: 2, fontVariant: ["tabular-nums"] },
   disc: { fontSize: 10, color: colors.muted, marginTop: spacing.md, lineHeight: 14 },
-});
+}));

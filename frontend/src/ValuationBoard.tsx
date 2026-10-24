@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { View, Text, StyleSheet, Pressable, ScrollView, TextInput, ActivityIndicator } from "react-native";
+import { View, Text, Pressable, ScrollView, TextInput, ActivityIndicator } from "react-native";
 import Icon from "@react-native-vector-icons/feather";
 
 import { api } from "./api";
-import { colors, spacing, radius } from "./theme";
+import { colors, spacing, radius, themedStyles, useTheme, type ThemeColors } from "./theme";
 
 type Stock = { t: string; n: string; s: string; p: number; v: number; d: number; b: string };
 type Board = {
@@ -16,18 +16,21 @@ type Board = {
   method: string;
 };
 
+// getters so each read returns the active theme's color
+const tone = (fg: keyof ThemeColors, bg: keyof ThemeColors) => ({ get fg() { return colors[fg]; }, get bg() { return colors[bg]; } });
 export const BUCKET_TONE: Record<string, { fg: string; bg: string }> = {
-  very_under: { fg: colors.valueVeryUnder, bg: colors.valueVeryUnderBg },
-  under: { fg: colors.valueUnder, bg: colors.valueUnderBg },
-  fair: { fg: colors.valueFair, bg: colors.valueFairBg },
-  over: { fg: colors.valueOver, bg: colors.valueOverBg },
-  very_over: { fg: colors.valueVeryOver, bg: colors.valueVeryOverBg },
+  very_under: tone("valueVeryUnder", "valueVeryUnderBg"),
+  under: tone("valueUnder", "valueUnderBg"),
+  fair: tone("valueFair", "valueFairBg"),
+  over: tone("valueOver", "valueOverBg"),
+  very_over: tone("valueVeryOver", "valueVeryOverBg"),
 };
 
 export const signedPct = (d: number) => `${d > 0 ? "+" : d < 0 ? "−" : ""}${Math.abs(d).toFixed(0)}%`;
 
 /** All S&P 500 stocks grouped by price vs OptiIQ Value (same model as the Long-term analysis). Tap a stock to analyze it. */
 export function ValuationBoard({ onSelect }: { onSelect: (ticker: string) => void }) {
+  useTheme();
   const [data, setData] = useState<Board | null>(null);
   const [err, setErr] = useState("");
   const [bucket, setBucket] = useState("very_under");
@@ -137,7 +140,7 @@ export function ValuationBoard({ onSelect }: { onSelect: (ticker: string) => voi
   );
 }
 
-const s = StyleSheet.create({
+const s = themedStyles((colors) => ({
   card: { backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: spacing.lg, marginTop: spacing.lg },
   head: { flexDirection: "row", alignItems: "flex-start", gap: spacing.sm },
   title: { fontSize: 17, fontWeight: "800", color: colors.onSurface },
@@ -166,4 +169,4 @@ const s = StyleSheet.create({
   chipPct: { fontSize: 11, fontWeight: "700", fontVariant: ["tabular-nums"], marginTop: 1 },
   empty: { fontSize: 13, color: colors.muted, textAlign: "center", marginVertical: spacing.lg },
   foot: { fontSize: 11, color: colors.muted, marginTop: spacing.md, lineHeight: 16 },
-});
+}));

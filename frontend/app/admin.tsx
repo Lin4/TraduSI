@@ -1,16 +1,17 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, ActivityIndicator, RefreshControl } from "react-native";
+import { View, Text, ScrollView, Pressable, TextInput, ActivityIndicator, RefreshControl } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import Icon from "@react-native-vector-icons/feather";
 
 import { api } from "@/src/api";
 import { ToastHost, toast } from "@/src/Toast";
-import { colors, spacing, radius } from "@/src/theme";
+import { colors, spacing, radius, themedStyles, useTheme } from "@/src/theme";
 
 const PLANS = ["free", "simple", "advance", "expert"];
 
 export default function Admin() {
+  useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [q, setQ] = useState("");
@@ -114,6 +115,7 @@ export default function Admin() {
 const TIER_ORDER = [["expert", "Expert"], ["advance", "Advance"], ["simple", "Simple"], ["trial", "Trial"], ["expired", "Expired"]];
 
 function Insights({ st }: { st: any }) {
+  useTheme();
   const max = Math.max(1, ...st.signups_daily.map((d: any) => d.count));
   const tierMax = Math.max(1, ...Object.values(st.tiers as Record<string, number>));
   return (
@@ -162,6 +164,7 @@ function Insights({ st }: { st: any }) {
 }
 
 function Kpi({ id, label, value }: { id: string; label: string; value: any }) {
+  useTheme();
   return (
     <View testID={id} style={s.kpi}>
       <Text style={s.kpiLabel}>{label}</Text>
@@ -170,7 +173,7 @@ function Kpi({ id, label, value }: { id: string; label: string; value: any }) {
   );
 }
 
-const s = StyleSheet.create({
+const s = themedStyles((colors) => ({
   kpis: { flexDirection: "row", gap: spacing.sm, marginBottom: spacing.sm },
   kpi: { flex: 1, backgroundColor: colors.surfaceSecondary, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.md },
   kpiLabel: { fontSize: 11, color: colors.muted, fontWeight: "700" },
@@ -207,4 +210,4 @@ const s = StyleSheet.create({
   chipOn: { backgroundColor: colors.brandPrimary, borderColor: colors.brandPrimary },
   chipText: { fontSize: 11, fontWeight: "800", color: colors.onSurface },
   chipTextOn: { color: colors.onBrandPrimary },
-});
+}));

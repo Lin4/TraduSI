@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, KeyboardAvoidingView, Platform } from "react-native";
+import { View, Text, ScrollView, Pressable, KeyboardAvoidingView, Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Icon from "@react-native-vector-icons/feather";
 
@@ -8,9 +8,10 @@ import { api } from "@/src/api";
 import { Button } from "@/src/Button";
 import { Input } from "@/src/Input";
 import { ToastHost, toast } from "@/src/Toast";
-import { colors, spacing, radius } from "@/src/theme";
+import { colors, spacing, radius, themedStyles, useTheme } from "@/src/theme";
 
 export default function Consent() {
+  useTheme();
   const insets = useSafeAreaInsets();
   const { refresh } = useAuth();
   const [agreed, setAgreed] = useState(false);
@@ -33,7 +34,7 @@ export default function Consent() {
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
           <Text style={styles.step}>Step 3 of 3</Text>
           <Text style={styles.title}>Consent & disclosures</Text>
-          <Text style={styles.subtitle}>Required before you can use TraduSI's AI recommendations.</Text>
+          <Text style={styles.subtitle}>Required before you can use TraduSI&apos;s AI recommendations.</Text>
 
           <View style={styles.doc}>
             <Text style={styles.docTitle}>Risk disclosure</Text>
@@ -79,7 +80,7 @@ export default function Consent() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   root: { flex: 1, backgroundColor: colors.surface },
   scroll: { padding: spacing.xl, paddingBottom: 160 },
   step: { color: colors.brandPrimary, fontWeight: "700", fontSize: 12, letterSpacing: 1 },
@@ -104,4 +105,4 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl, paddingTop: spacing.md,
     backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border,
   },
-});
+}));

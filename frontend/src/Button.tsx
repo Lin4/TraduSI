@@ -1,6 +1,6 @@
 import React from "react";
 import { Pressable, Text, ActivityIndicator, StyleSheet, View, ViewStyle } from "react-native";
-import { colors, radius, spacing } from "./theme";
+import { colors, radius, spacing, useTheme } from "./theme";
 
 type Props = {
   label: string;
@@ -14,6 +14,7 @@ type Props = {
 };
 
 export function Button({ label, onPress, variant = "primary", loading, disabled, style, testID, icon }: Props) {
+  useTheme();
   const bg = variant === "primary" ? colors.brandPrimary
     : variant === "secondary" ? colors.brandSecondary
     : "transparent";

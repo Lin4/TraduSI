@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, Platform, Modal, AppState } from "react-native";
+import { View, Text, ScrollView, Pressable, Platform, Modal, AppState } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
@@ -11,11 +11,12 @@ import { Button } from "@/src/Button";
 import { ToastHost, toast } from "@/src/Toast";
 import { PLAN_CARDS, usePlan, tierLabel } from "@/src/plans";
 import { useSubscription, rcEnabled, rcSimulated, PACKAGE_TIER } from "@/src/revenuecat";
-import { colors, spacing, radius } from "@/src/theme";
+import { colors, spacing, radius, themedStyles, useTheme } from "@/src/theme";
 
 type PlanId = "simple" | "advance" | "expert";
 
 export default function Upgrade() {
+  useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { refresh, user } = useAuth();
@@ -146,7 +147,7 @@ export default function Upgrade() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   header: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingHorizontal: spacing.lg, paddingBottom: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.divider },
   back: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.surfaceTertiary, alignItems: "center", justifyContent: "center" },
   title: { fontSize: 20, fontWeight: "800", color: colors.onSurface },
@@ -167,7 +168,7 @@ const styles = StyleSheet.create({
   warn: { fontSize: 12, color: colors.warning, marginTop: 4 },
   link: { minHeight: 44, alignItems: "center", justifyContent: "center" },
   linkText: { color: colors.brandPrimary, fontWeight: "700", fontSize: 13 },
-  modalWrap: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "center", padding: spacing.xl },
-  modal: { backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.xl, gap: spacing.md },
+  modalWrap: { flex: 1, backgroundColor: colors.backdrop, justifyContent: "center", padding: spacing.xl },
+  modal: { backgroundColor: colors.sheet, borderRadius: radius.lg, padding: spacing.xl, gap: spacing.md },
   modalTitle: { fontSize: 18, fontWeight: "800", color: colors.onSurface },
-});
+}));

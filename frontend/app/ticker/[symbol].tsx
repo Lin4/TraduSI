@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator } from "react-native";
+import { View, Text, ScrollView, Pressable, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import Icon from "@react-native-vector-icons/feather";
@@ -8,9 +8,10 @@ import { api } from "@/src/api";
 import { ToastHost, toast } from "@/src/Toast";
 import { MetricRow, Badge } from "@/src/parts";
 import { FreshnessPill, LoadingSkeleton } from "@/src/charts";
-import { colors, spacing, radius } from "@/src/theme";
+import { colors, spacing, radius, themedStyles, useTheme } from "@/src/theme";
 
 export default function TickerDetail() {
+  useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { symbol } = useLocalSearchParams<{ symbol: string }>();
@@ -38,8 +39,8 @@ export default function TickerDetail() {
 
   const price = day?.price || long?.price || options?.price || 0;
   const candles = day?.candles || long?.candles || [];
-  const max = Math.max(...candles.map((c: any) => c.h), 1);
-  const min = Math.min(...candles.map((c: any) => c.l), 0);
+  const max = candles.length ? Math.max(...candles.map((c: any) => c.h)) : 1;
+  const min = candles.length ? Math.min(...candles.map((c: any) => c.l)) : 0;
   const range = max - min || 1;
 
   return (
@@ -152,7 +153,7 @@ export default function TickerDetail() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   header: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingHorizontal: spacing.lg, paddingBottom: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.divider },
   back: { width: 36, height: 36, borderRadius: radius.pill, backgroundColor: colors.surfaceTertiary, alignItems: "center", justifyContent: "center" },
   ticker: { fontSize: 20, fontWeight: "800", color: colors.onSurface, letterSpacing: -0.5 },
@@ -174,4 +175,4 @@ const styles = StyleSheet.create({
 
   card: { backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: spacing.lg },
   ai: { backgroundColor: colors.brandSecondary, color: colors.onBrandSecondary, padding: spacing.sm, borderRadius: radius.md, fontSize: 13, lineHeight: 18, marginBottom: spacing.md },
-});
+}));

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable } from "react-native";
+import { View, Text, ScrollView, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import Icon from "@react-native-vector-icons/feather";
@@ -11,7 +11,7 @@ import { ToastHost, toast } from "@/src/Toast";
 import { MetricRow, Badge } from "@/src/parts";
 import { PayoffChart, FreshnessPill, LoadingSkeleton } from "@/src/charts";
 import { useTTS, useSTT } from "@/src/voice";
-import { colors, spacing, radius } from "@/src/theme";
+import { colors, spacing, radius, themedStyles, useTheme } from "@/src/theme";
 import { PlanGate, usePlan } from "@/src/plans";
 import { ACCOUNTS, Chips, Label, OptionInsights, accountLabel } from "@/src/screen";
 import { FinancialsChart, ValuationMeasures, PeerComparison, BalanceSheet, OptiIQCard } from "@/src/financials";
@@ -26,10 +26,12 @@ const STRATS = ["auto", "Cash Secured Put", "Covered Call", "Bull Put Spread", "
 type Lab = "day" | "swing" | "long" | "options";
 
 export default function AnalyzeGated() {
+  useTheme();
   return <PlanGate><Analyze /></PlanGate>;
 }
 
 function Analyze() {
+  useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [ticker, setTicker] = useState("");
@@ -217,6 +219,7 @@ function Analyze() {
 }
 
 function ProvenanceBar({ src }: { src: any }) {
+  useTheme();
   return (
     <View style={{ marginVertical: spacing.sm }}>
       <FreshnessPill source={src.quote} timestamp={src.fetched_at} />
@@ -225,6 +228,7 @@ function ProvenanceBar({ src }: { src: any }) {
 }
 
 function SpeakAi({ text }: { text: string }) {
+  useTheme();
   const { play, stop, loading, playing } = useTTS();
   const { features } = usePlan();
   return (
@@ -238,6 +242,7 @@ function SpeakAi({ text }: { text: string }) {
 }
 
 function MicButton({ onText }: { onText: (t: string) => void }) {
+  useTheme();
   const { start, stop, recording, loading } = useSTT(onText);
   return (
     <Pressable testID="mic-btn" onPress={() => (recording ? stop() : start())} style={[styles.micBtn, recording && styles.micBtnActive]}>
@@ -247,6 +252,7 @@ function MicButton({ onText }: { onText: (t: string) => void }) {
 }
 
 function OptionsLab({ r }: { r: any }) {
+  useTheme();
   const plan = usePlan();
   const [expanded, setExpanded] = useState<"basic" | "greeks" | "scenarios">("basic");
   return (
@@ -351,7 +357,7 @@ function OptionsLab({ r }: { r: any }) {
               <Text style={styles.scenarioLabel}>Day {row.days_elapsed}</Text>
               <View style={styles.scenarioCells}>
                 {Object.entries(row.pnl).map(([mv, p]: any) => (
-                  <View key={mv} style={[styles.scenarioCell, { backgroundColor: p >= 0 ? "#ECFDF5" : "#FEF2F2" }]}>
+                  <View key={mv} style={[styles.scenarioCell, { backgroundColor: p >= 0 ? colors.gainBg : colors.lossBg }]}>
                     <Text style={styles.scenarioMv}>{mv}</Text>
                     <Text style={[styles.scenarioPnl, { color: p >= 0 ? colors.success : colors.error }]}>${p}</Text>
                   </View>
@@ -386,6 +392,7 @@ function OptionsLab({ r }: { r: any }) {
 }
 
 function GreekBox({ label, value }: { label: string; value: string }) {
+  useTheme();
   return (
     <View style={styles.greekBox}>
       <Text style={styles.greekLabel}>{label}</Text>
@@ -395,6 +402,7 @@ function GreekBox({ label, value }: { label: string; value: string }) {
 }
 
 function ShortForm({ r }: { r: any }) {
+  useTheme();
   return (
     <View>
       <View style={{ flexDirection: "row", gap: 6, marginVertical: spacing.sm }}>
@@ -417,6 +425,7 @@ function ShortForm({ r }: { r: any }) {
 }
 
 function TradePlan({ r }: { r: any }) {
+  useTheme();
   const p = r.trade_plan;
   if (!p) return null;
   const long = p.direction === "long";
@@ -473,6 +482,7 @@ function TradePlan({ r }: { r: any }) {
 }
 
 function ScenarioCards({ rows, pnlKey }: { rows: any[]; pnlKey?: string }) {
+  useTheme();
   return (
     <View style={styles.heroRow}>
       {rows.map((s) => {
@@ -491,6 +501,7 @@ function ScenarioCards({ rows, pnlKey }: { rows: any[]; pnlKey?: string }) {
 }
 
 function ValuationEditor({ r }: { r: any }) {
+  useTheme();
   const inp = r.valuation_inputs;
   const [v, setV] = useState<any>(r.valuation);
   const [g, setG] = useState({ bull: String(inp?.growth?.bull ?? 15), base: String(inp?.growth?.base ?? 8), bear: String(inp?.growth?.bear ?? 0) });
@@ -534,6 +545,7 @@ function ValuationEditor({ r }: { r: any }) {
 }
 
 function LongForm({ r }: { r: any }) {
+  useTheme();
   return (
     <View>
       <View style={{ flexDirection: "row", gap: 6, marginVertical: spacing.sm }}>
@@ -568,15 +580,15 @@ function LongForm({ r }: { r: any }) {
       </View>
       <Text style={styles.sectionLabel}>Analyst ratings</Text>
       <View style={styles.ratings}>
-        <View style={[styles.ratingBar, { flex: Math.max(r.analyst_ratings?.buy || 0, 1), backgroundColor: colors.success }]}><Text style={styles.ratingText}>Buy {r.analyst_ratings?.buy || 0}</Text></View>
-        <View style={[styles.ratingBar, { flex: Math.max(r.analyst_ratings?.hold || 0, 1), backgroundColor: colors.warning }]}><Text style={styles.ratingText}>Hold {r.analyst_ratings?.hold || 0}</Text></View>
-        <View style={[styles.ratingBar, { flex: Math.max(r.analyst_ratings?.sell || 0, 1), backgroundColor: colors.error }]}><Text style={styles.ratingText}>Sell {r.analyst_ratings?.sell || 0}</Text></View>
+        <View style={[styles.ratingBar, { flex: Math.max(r.analyst_ratings?.buy || 0, 1), backgroundColor: colors.success }]}><Text style={[styles.ratingText, { color: colors.onSuccess }]}>Buy {r.analyst_ratings?.buy || 0}</Text></View>
+        <View style={[styles.ratingBar, { flex: Math.max(r.analyst_ratings?.hold || 0, 1), backgroundColor: colors.warning }]}><Text style={[styles.ratingText, { color: colors.onWarning }]}>Hold {r.analyst_ratings?.hold || 0}</Text></View>
+        <View style={[styles.ratingBar, { flex: Math.max(r.analyst_ratings?.sell || 0, 1), backgroundColor: colors.error }]}><Text style={[styles.ratingText, { color: colors.onError }]}>Sell {r.analyst_ratings?.sell || 0}</Text></View>
       </View>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   header: { paddingHorizontal: spacing.lg, paddingBottom: spacing.sm, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.divider },
   title: { fontSize: 22, fontWeight: "800", color: colors.onSurface },
   modeRow: { gap: spacing.sm, paddingTop: spacing.md, paddingRight: spacing.lg },
@@ -613,7 +625,7 @@ const styles = StyleSheet.create({
   logicBox: { backgroundColor: colors.surfaceSecondary, borderRadius: radius.md, padding: spacing.md, borderWidth: 1, borderColor: colors.border, marginTop: spacing.md },
   logicTitle: { fontSize: 12, fontWeight: "800", color: colors.onSurface, marginBottom: 6 },
   logicText: { fontSize: 12, color: colors.onSurfaceSecondary, lineHeight: 18 },
-  heroVal: { fontSize: 20, fontWeight: "800", marginTop: 4, fontVariant: ["tabular-nums"], letterSpacing: -0.5 },
+  heroVal: { fontSize: 20, fontWeight: "800", marginTop: 4, color: colors.onSurface, fontVariant: ["tabular-nums"], letterSpacing: -0.5 },
 
   greekGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginVertical: spacing.sm },
   greekBox: { flexGrow: 1, flexBasis: "22%", backgroundColor: colors.surfaceSecondary, padding: spacing.sm, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, alignItems: "center" },
@@ -649,9 +661,9 @@ const styles = StyleSheet.create({
 
   ratings: { flexDirection: "row", height: 32, borderRadius: radius.md, overflow: "hidden", gap: 2 },
   ratingBar: { alignItems: "center", justifyContent: "center" },
-  ratingText: { color: "#FFFFFF", fontWeight: "700", fontSize: 11 },
+  ratingText: { fontWeight: "700", fontSize: 11 },
   triggerBox: { backgroundColor: colors.surfaceSecondary, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.md, marginTop: spacing.md, gap: spacing.md },
   triggerRow: { flexDirection: "row", gap: spacing.sm, alignItems: "flex-start" },
   triggerTitle: { fontSize: 12, fontWeight: "800", color: colors.onSurface, textTransform: "capitalize" },
   triggerText: { fontSize: 12, color: colors.onSurfaceSecondary, marginTop: 2, lineHeight: 17 },
-});
+}));

@@ -10,12 +10,13 @@ import { Button } from "@/src/Button";
 import { Input } from "@/src/Input";
 import { CodeInput, ResendRow, useCountdown, CODE_LEN } from "@/src/CodeInput";
 import { ToastHost, toast } from "@/src/Toast";
-import { colors } from "@/src/theme";
+import { colors, useTheme } from "@/src/theme";
 import { authStyles as styles } from "@/src/authStyles";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 export default function ForgotPassword() {
+  useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const params = useLocalSearchParams<{ email?: string }>();

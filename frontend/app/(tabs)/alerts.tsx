@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, Modal, KeyboardAvoidingView, Platform } from "react-native";
+import { View, Text, ScrollView, Pressable, Modal, KeyboardAvoidingView, Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
 import Icon from "@react-native-vector-icons/feather";
@@ -9,7 +9,7 @@ import { Input } from "@/src/Input";
 import { Button } from "@/src/Button";
 import { ToastHost, toast } from "@/src/Toast";
 import { Badge } from "@/src/parts";
-import { colors, spacing, radius } from "@/src/theme";
+import { colors, spacing, radius, themedStyles, useTheme } from "@/src/theme";
 import { PlanGate, usePlan } from "@/src/plans";
 
 const KINDS = [
@@ -21,10 +21,12 @@ const KINDS = [
 const PROFILE_OPTS = [{ id: "low_low", label: "Low risk" }, { id: "low_high", label: "Higher reward" }, { id: "high_high", label: "High risk" }];
 
 export default function AlertsGated() {
+  useTheme();
   return <PlanGate><Alerts /></PlanGate>;
 }
 
 function Alerts() {
+  useTheme();
   const insets = useSafeAreaInsets();
   const [items, setItems] = useState<any[]>([]);
   const [open, setOpen] = useState(false);
@@ -126,7 +128,7 @@ function Alerts() {
         {items.map((it) => (
           <View key={it.alert_id} style={styles.row}>
             <View style={styles.iconWrap}>
-              <Icon name={KINDS.find((k) => k.id === it.kind)?.icon || "bell"} size={16} color={colors.brandPrimary} />
+              <Icon name={(KINDS.find((k) => k.id === it.kind)?.icon || "bell") as any} size={16} color={colors.brandPrimary} />
             </View>
             <View style={{ flex: 1 }}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
@@ -199,7 +201,7 @@ function Alerts() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   header: { paddingHorizontal: spacing.lg, paddingBottom: spacing.md, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.divider },
   headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   title: { fontSize: 26, fontWeight: "800", color: colors.onSurface, letterSpacing: -0.5 },
@@ -222,8 +224,8 @@ const styles = StyleSheet.create({
   emptyText: { color: colors.onSurface, fontSize: 14, textAlign: "center", fontWeight: "600", lineHeight: 20 },
   emptySub: { color: colors.muted, fontSize: 12, textAlign: "center", lineHeight: 17 },
 
-  modalWrap: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.4)" },
-  modal: { backgroundColor: colors.surface, padding: spacing.xl, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 48 },
+  modalWrap: { flex: 1, justifyContent: "flex-end", backgroundColor: colors.backdrop },
+  modal: { backgroundColor: colors.sheet, padding: spacing.xl, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 48 },
   modalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: spacing.lg },
   modalTitle: { fontSize: 18, fontWeight: "800", color: colors.onSurface },
 
@@ -233,4 +235,4 @@ const styles = StyleSheet.create({
   chipActive: { backgroundColor: colors.brandPrimary, borderColor: colors.brandPrimary },
   chipText: { color: colors.onSurface, fontSize: 12, fontWeight: "600" },
   chipTextActive: { color: colors.onBrandPrimary },
-});
+}));

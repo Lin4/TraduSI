@@ -1,8 +1,7 @@
-import { StyleSheet } from "react-native";
-import { colors, spacing, radius } from "./theme";
+import { spacing, radius, themedStyles } from "./theme";
 
 /** Shared look for the code-based auth screens (verify email, forgot password, change email). */
-export const authStyles = StyleSheet.create({
+export const authStyles = themedStyles((colors) => ({
   root: { flex: 1, backgroundColor: colors.surface },
   scroll: { padding: spacing.xl, paddingBottom: spacing["2xl"] },
   back: { width: 44, height: 44, borderRadius: radius.pill, alignItems: "center", justifyContent: "center", backgroundColor: colors.surfaceTertiary, marginBottom: spacing.lg },
@@ -15,4 +14,4 @@ export const authStyles = StyleSheet.create({
   link: { color: colors.brandPrimary, fontWeight: "700", fontSize: 13 },
   change: { flexDirection: "row", justifyContent: "center", alignItems: "center", marginTop: spacing.xl, minHeight: 44 },
   label: { color: colors.onSurface, fontSize: 13, fontWeight: "600", marginBottom: spacing.xs, marginTop: spacing.lg },
-});
+}));

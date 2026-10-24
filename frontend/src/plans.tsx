@@ -1,11 +1,11 @@
 import React from "react";
-import { View, Text, StyleSheet, Pressable } from "react-native";
+import { View, Text, Pressable } from "react-native";
 import { useRouter } from "expo-router";
 import Icon from "@react-native-vector-icons/feather";
 
 import { useAuth } from "./auth";
 import { useSubscription } from "./revenuecat";
-import { colors, spacing, radius } from "./theme";
+import { colors, spacing, radius, themedStyles, useTheme } from "./theme";
 
 export type Tier = "expired" | "trial" | "simple" | "advance" | "expert";
 export const TIER_RANK: Record<Tier, number> = { expired: 0, trial: 1, simple: 2, advance: 3, expert: 4 };
@@ -55,6 +55,7 @@ export function usePlan() {
 
 /** Inline lock shown in place of a gated feature. */
 export function LockedFeature({ need, label, testID }: { need: "simple" | "advance" | "expert"; label: string; testID?: string }) {
+  useTheme();
   const router = useRouter();
   return (
     <Pressable testID={testID || `locked-${need}`} onPress={() => router.push("/upgrade" as any)} style={s.lock}>
@@ -67,6 +68,7 @@ export function LockedFeature({ need, label, testID }: { need: "simple" | "advan
 
 /** Full paywall when the 7-day trial has ended and no plan is active. */
 export function PlanGate({ children }: { children: React.ReactNode }) {
+  useTheme();
   const { expired } = usePlan();
   const router = useRouter();
   if (!expired) return <>{children}</>;
@@ -82,7 +84,7 @@ export function PlanGate({ children }: { children: React.ReactNode }) {
   );
 }
 
-const s = StyleSheet.create({
+const s = themedStyles((colors) => ({
   lock: { flexDirection: "row", alignItems: "center", gap: spacing.sm, minHeight: 44, paddingHorizontal: spacing.md, borderRadius: radius.md, borderWidth: 1, borderStyle: "dashed", borderColor: colors.brandPrimary, backgroundColor: colors.brandSecondary, marginVertical: spacing.sm },
   lockText: { flex: 1, fontSize: 12, fontWeight: "700", color: colors.onBrandSecondary },
   lockCta: { fontSize: 12, fontWeight: "800", color: colors.brandPrimary },
@@ -92,4 +94,4 @@ const s = StyleSheet.create({
   wallSub: { fontSize: 14, color: colors.onSurfaceSecondary, textAlign: "center", lineHeight: 20 },
   wallBtn: { minHeight: 48, paddingHorizontal: spacing.xl, borderRadius: radius.pill, backgroundColor: colors.brandPrimary, alignItems: "center", justifyContent: "center" },
   wallBtnText: { color: colors.onBrandPrimary, fontWeight: "800", fontSize: 15 },
-});
+}));

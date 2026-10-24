@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, Pressable } from "react-native";
+import { View, Text, KeyboardAvoidingView, Platform, ScrollView, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Link, useRouter } from "expo-router";
 import Icon from "@react-native-vector-icons/feather";
@@ -8,11 +8,12 @@ import { useAuth } from "@/src/auth";
 import { Button } from "@/src/Button";
 import { Input } from "@/src/Input";
 import { ToastHost, toast } from "@/src/Toast";
-import { colors, spacing, radius } from "@/src/theme";
+import { colors, spacing, radius, themedStyles, useTheme } from "@/src/theme";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 export default function Register() {
+  useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { signUpEmail } = useAuth();
@@ -63,7 +64,7 @@ export default function Register() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   root: { flex: 1, backgroundColor: colors.surface },
   scroll: { padding: spacing.xl, paddingBottom: spacing["2xl"] },
   back: { width: 40, height: 40, borderRadius: radius.pill, alignItems: "center", justifyContent: "center", backgroundColor: colors.surfaceTertiary, marginBottom: spacing.lg },
@@ -75,4 +76,4 @@ const styles = StyleSheet.create({
   },
   note: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginBottom: spacing.lg },
   noteText: { flex: 1, fontSize: 12, color: colors.muted, lineHeight: 17 },
-});
+}));

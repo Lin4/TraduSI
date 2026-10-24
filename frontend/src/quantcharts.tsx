@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { View, Text, StyleSheet, Platform } from "react-native";
 import Svg, { Circle, Line, Polyline, Text as SvgText } from "react-native-svg";
 
-import { colors, spacing } from "./theme";
+import { colors, spacing, themedStyles, useTheme } from "./theme";
 
 const SVG_FONT = Platform.OS === "web" ? "Helvetica, Arial, sans-serif" : undefined;
 
@@ -12,6 +12,7 @@ export const tone = (v: number) => (v >= 70 ? colors.success : v >= 50 ? colors.
 
 /** Circular 0-100 score. */
 export function ScoreRing({ score, size = 76, testID }: { score: number; size?: number; testID?: string }) {
+  useTheme();
   const sw = 7;
   const r = (size - sw) / 2;
   const c = 2 * Math.PI * r;
@@ -35,6 +36,7 @@ type Series = { data: number[]; color: string; label: string; dashed?: boolean }
 
 /** Cumulative P&L lines with a zero baseline. */
 export function EquityCurve({ series, height = 120, testID }: { series: Series[]; height?: number; testID?: string }) {
+  useTheme();
   const [w, setW] = useState(0);
   const rows = series.filter((x) => x.data && x.data.length > 1);
   if (!rows.length) return null;
@@ -78,6 +80,7 @@ type Bucket = { range: string; n: number; predicted: number; realized: number; g
 
 /** Predicted POP (x) vs realized win rate (y). Dots on the diagonal = perfectly calibrated. */
 export function CalibrationChart({ buckets, testID }: { buckets: Bucket[]; testID?: string }) {
+  useTheme();
   const [w, setW] = useState(0);
   if (!buckets?.length) return null;
   const h = 210, padL = 30, padR = 10, padT = 10, padB = 26;
@@ -118,6 +121,7 @@ export function CalibrationChart({ buckets, testID }: { buckets: Bucket[]; testI
 
 /** Horizontal 0-100 bar with optional caption ends. */
 export function Gauge({ value, left, right, testID }: { value: number; left?: string; right?: string; testID?: string }) {
+  useTheme();
   const v = Math.max(0, Math.min(100, value));
   return (
     <View testID={testID} style={{ marginTop: 6 }}>
@@ -134,7 +138,7 @@ export function Gauge({ value, left, right, testID }: { value: number; left?: st
   );
 }
 
-const s = StyleSheet.create({
+const s = themedStyles((colors) => ({
   ringNum: { fontWeight: "900", fontVariant: ["tabular-nums"], letterSpacing: -0.5 },
   ringOf: { fontSize: 9, color: colors.muted, marginTop: -2, fontWeight: "700" },
   chartBox: { backgroundColor: colors.surfaceSecondary, borderRadius: 10, overflow: "hidden" },
@@ -147,4 +151,4 @@ const s = StyleSheet.create({
   gFill: { height: 8, borderRadius: 4 },
   gEnds: { flexDirection: "row", justifyContent: "space-between", marginTop: 2 },
   gEnd: { fontSize: 10, color: colors.muted },
-});
+}));

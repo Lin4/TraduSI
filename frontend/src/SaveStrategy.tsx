@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, Modal, Pressable, KeyboardAvoidingView, Platform, ScrollView } from "react-native";
+import { View, Text, Modal, Pressable, KeyboardAvoidingView, Platform, ScrollView } from "react-native";
 import Icon from "@react-native-vector-icons/feather";
 import { useRouter } from "expo-router";
 
@@ -7,7 +7,7 @@ import { api } from "./api";
 import { Input } from "./Input";
 import { Button } from "./Button";
 import { toast } from "./Toast";
-import { colors, spacing, radius } from "./theme";
+import { colors, spacing, radius, themedStyles, useTheme } from "./theme";
 
 export type Thr = { mode: "usd" | "pct"; value: string };
 
@@ -15,6 +15,7 @@ export type Thr = { mode: "usd" | "pct"; value: string };
 export function ThresholdField({ label, value, onChange, idPrefix, pctHint }: {
   label: string; value: Thr; onChange: (t: Thr) => void; idPrefix: string; pctHint: string;
 }) {
+  useTheme();
   return (
     <View style={s.thr}>
       <View style={s.thrHead}>
@@ -41,6 +42,7 @@ export const toThreshold = (t: Thr) => {
 export function SaveStrategySheet({ visible, onClose, ticker, expiration, legs, defaultName, strategyType }: {
   visible: boolean; onClose: () => void; ticker: string; expiration: string | null; legs: any[]; defaultName: string; strategyType?: string | null;
 }) {
+  useTheme();
   const router = useRouter();
   const [name, setName] = useState("");
   const [target, setTarget] = useState<Thr>({ mode: "pct", value: "50" });
@@ -84,9 +86,9 @@ export function SaveStrategySheet({ visible, onClose, ticker, expiration, legs, 
   );
 }
 
-const s = StyleSheet.create({
-  wrap: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.4)" },
-  sheet: { backgroundColor: colors.surface, padding: spacing.xl, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 40, maxHeight: "90%" },
+const s = themedStyles((colors) => ({
+  wrap: { flex: 1, justifyContent: "flex-end", backgroundColor: colors.backdrop },
+  sheet: { backgroundColor: colors.sheet, padding: spacing.xl, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 40, maxHeight: "90%" },
   head: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: spacing.lg },
   title: { fontSize: 18, fontWeight: "800", color: colors.onSurface },
   close: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.surfaceTertiary, alignItems: "center", justifyContent: "center" },
@@ -99,4 +101,4 @@ const s = StyleSheet.create({
   tText: { fontWeight: "800", color: colors.onSurface },
   tTextOn: { color: colors.onBrandPrimary },
   note: { fontSize: 12, color: colors.muted, marginBottom: spacing.lg, lineHeight: 17 },
-});
+}));

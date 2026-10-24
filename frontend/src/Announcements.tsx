@@ -1,13 +1,14 @@
 import React, { useCallback, useState } from "react";
-import { View, Text, StyleSheet, Pressable } from "react-native";
+import { View, Text, Pressable } from "react-native";
 import { useFocusEffect } from "expo-router";
 import Icon from "@react-native-vector-icons/feather";
 
 import { api } from "./api";
-import { colors, spacing, radius } from "./theme";
+import { colors, spacing, radius, themedStyles, useTheme } from "./theme";
 
 /** Admin announcements for this user's plan tier; dismiss hides it for good. */
 export function AnnouncementBanner() {
+  useTheme();
   const [items, setItems] = useState<any[]>([]);
   useFocusEffect(useCallback(() => {
     api("/api/announcements").then((r) => setItems(r.items || [])).catch(() => {});
@@ -35,9 +36,9 @@ export function AnnouncementBanner() {
   );
 }
 
-const s = StyleSheet.create({
+const s = themedStyles((colors) => ({
   card: { flexDirection: "row", gap: spacing.sm, backgroundColor: colors.brandSecondary, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.brandPrimary, padding: spacing.md, marginBottom: spacing.md },
   title: { fontSize: 14, fontWeight: "800", color: colors.onBrandSecondary },
   msg: { fontSize: 13, color: colors.onBrandSecondary, marginTop: 2, lineHeight: 18 },
   x: { width: 28, height: 28, alignItems: "center", justifyContent: "center" },
-});
+}));

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable } from "react-native";
+import { View, Text, ScrollView, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import Icon from "@react-native-vector-icons/feather";
@@ -8,9 +8,10 @@ import { api } from "@/src/api";
 import { Button } from "@/src/Button";
 import { LoadingSkeleton } from "@/src/charts";
 import { ToastHost, toast } from "@/src/Toast";
-import { colors, spacing, radius } from "@/src/theme";
+import { colors, spacing, radius, themedStyles, useTheme } from "@/src/theme";
 
 export default function Lesson() {
+  useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { level } = useLocalSearchParams<{ level: string }>();
@@ -93,7 +94,7 @@ export default function Lesson() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   header: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingHorizontal: spacing.lg, paddingBottom: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.divider },
   back: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.surfaceTertiary, alignItems: "center", justifyContent: "center" },
   title: { flex: 1, fontSize: 17, fontWeight: "800", color: colors.onSurface },
@@ -111,4 +112,4 @@ const styles = StyleSheet.create({
   explain: { fontSize: 12, color: colors.muted, fontStyle: "italic", marginTop: spacing.sm },
   resultBox: { borderWidth: 2, borderRadius: radius.lg, padding: spacing.lg, gap: spacing.sm, marginTop: spacing.sm },
   resultTitle: { fontSize: 17, fontWeight: "800", color: colors.onSurface },
-});
+}));

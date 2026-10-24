@@ -1,15 +1,16 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, ActivityIndicator } from "react-native";
+import { View, Text, ActivityIndicator } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import Icon from "@react-native-vector-icons/feather";
 
 import { api } from "@/src/api";
 import { useAuth } from "@/src/auth";
 import { Button } from "@/src/Button";
-import { colors, spacing } from "@/src/theme";
+import { colors, spacing, themedStyles, useTheme } from "@/src/theme";
 
 /** Web return page after Stripe checkout: verifies the session and activates the plan. */
 export default function BillingSuccess() {
+  useTheme();
   const { session_id, cancelled } = useLocalSearchParams<{ session_id?: string; cancelled?: string }>();
   const { refresh } = useAuth();
   const router = useRouter();
@@ -46,7 +47,7 @@ export default function BillingSuccess() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   wrap: { flex: 1, alignItems: "center", justifyContent: "center", gap: spacing.lg, padding: spacing.xl, backgroundColor: colors.surface },
   title: { fontSize: 18, fontWeight: "800", color: colors.onSurface, textAlign: "center" },
-});
+}));

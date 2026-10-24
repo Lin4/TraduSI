@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, RefreshControl } from "react-native";
+import { View, Text, ScrollView, Pressable, ActivityIndicator, RefreshControl } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import Icon from "@react-native-vector-icons/feather";
@@ -8,7 +8,7 @@ import { api } from "@/src/api";
 import { ToastHost, toast } from "@/src/Toast";
 import { Badge, MetricRow } from "@/src/parts";
 import { money } from "@/src/pnl";
-import { colors, spacing, radius } from "@/src/theme";
+import { colors, spacing, radius, themedStyles, useTheme } from "@/src/theme";
 
 const when = (d?: string | null) => (d ? new Date(d.endsWith("Z") || d.includes("+") ? d : d + "Z").toLocaleString() : "—");
 const ago = (d?: string | null) => {
@@ -18,6 +18,7 @@ const ago = (d?: string | null) => {
 };
 
 export default function AdminUser() {
+  useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { uid } = useLocalSearchParams<{ uid: string }>();
@@ -133,6 +134,7 @@ export default function AdminUser() {
 }
 
 function Kpi({ id, label, value }: { id: string; label: string; value: any }) {
+  useTheme();
   return (
     <View testID={id} style={s.kpi}>
       <Text style={s.kpiLabel}>{label}</Text>
@@ -141,7 +143,7 @@ function Kpi({ id, label, value }: { id: string; label: string; value: any }) {
   );
 }
 
-const s = StyleSheet.create({
+const s = themedStyles((colors) => ({
   header: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingHorizontal: spacing.lg, paddingBottom: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.divider },
   back: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.surfaceTertiary, alignItems: "center", justifyContent: "center" },
   title: { flex: 1, fontSize: 18, fontWeight: "800", color: colors.onSurface },
@@ -167,4 +169,4 @@ const s = StyleSheet.create({
   timeline: { flexDirection: "row", gap: spacing.sm, paddingVertical: 6 },
   dot: { width: 10, height: 10, borderRadius: 5, marginTop: 4 },
   muted: { fontSize: 12, color: colors.muted, textAlign: "center", marginVertical: spacing.sm },
-});
+}));

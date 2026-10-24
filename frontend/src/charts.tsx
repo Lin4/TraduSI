@@ -1,6 +1,6 @@
 import React, { useMemo } from "react";
-import { View, Text, StyleSheet } from "react-native";
-import { colors, radius, spacing } from "./theme";
+import { View, Text } from "react-native";
+import { colors, radius, spacing, themedStyles, useTheme } from "./theme";
 
 type Leg = { action: string; type: string; strike: number; qty?: number };
 
@@ -38,6 +38,7 @@ export function PayoffChart({
   width?: number;
   height?: number;
 }) {
+  useTheme();
   const { points, minY, maxY, minX, maxX } = useMemo(() => {
     const strikes = legs.map((l) => l.strike);
     const lo = Math.min(...strikes, currentPrice) * 0.85;
@@ -131,7 +132,7 @@ export function PayoffChart({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   wrap: { backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: 0, overflow: "hidden" },
   zeroLine: { position: "absolute", height: 1, backgroundColor: colors.borderStrong, left: 0 },
   currentLine: { position: "absolute", width: 1, backgroundColor: colors.brandPrimary, top: 0, opacity: 0.6 },
@@ -142,9 +143,10 @@ const styles = StyleSheet.create({
   legendRow: { flexDirection: "row", alignItems: "center" },
   legendDot: { width: 8, height: 8, borderRadius: 2, marginRight: 4 },
   legendText: { fontSize: 10, color: colors.muted, fontWeight: "600" },
-});
+}));
 
 export function LoadingSkeleton({ lines = 3 }: { lines?: number }) {
+  useTheme();
   return (
     <View style={{ gap: 8, padding: spacing.md }}>
       {Array.from({ length: lines }).map((_, i) => (
@@ -154,11 +156,12 @@ export function LoadingSkeleton({ lines = 3 }: { lines?: number }) {
   );
 }
 
-const skStyles = StyleSheet.create({
+const skStyles = themedStyles((colors) => ({
   bar: { height: 12, borderRadius: 6, backgroundColor: colors.surfaceTertiary },
-});
+}));
 
 export function FreshnessPill({ source, timestamp }: { source?: string; timestamp?: string }) {
+  useTheme();
   const t = timestamp ? new Date(timestamp) : null;
   const label = t ? t.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "live";
   return (
@@ -169,8 +172,8 @@ export function FreshnessPill({ source, timestamp }: { source?: string; timestam
   );
 }
 
-const pillStyles = StyleSheet.create({
+const pillStyles = themedStyles((colors) => ({
   wrap: { flexDirection: "row", alignItems: "center", backgroundColor: colors.surfaceSecondary, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, alignSelf: "flex-start", borderWidth: 1, borderColor: colors.border },
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.success, marginRight: 5 },
   text: { fontSize: 10, color: colors.muted, fontWeight: "600" },
-});
+}));

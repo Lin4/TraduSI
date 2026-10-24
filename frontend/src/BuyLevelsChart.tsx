@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, Pressable, Platform, ActivityIndicator } from "react-native";
+import { View, Text, Pressable, Platform, ActivityIndicator } from "react-native";
 import Svg, { Circle, Line, Polyline, Rect, Text as SvgText } from "react-native-svg";
 import Icon from "@react-native-vector-icons/feather";
 import { useRouter } from "expo-router";
@@ -7,7 +7,7 @@ import { useRouter } from "expo-router";
 import { api } from "./api";
 import { toast } from "./Toast";
 import { usePlan } from "./plans";
-import { colors, spacing, radius } from "./theme";
+import { colors, spacing, radius, themedStyles, useTheme } from "./theme";
 
 const SVG_FONT = Platform.OS === "web" ? "Helvetica, Arial, sans-serif" : undefined;
 const RANGES = [{ id: "6M", n: 126 }, { id: "1Y", n: 252 }, { id: "2Y", n: 0 }];
@@ -19,6 +19,7 @@ const fullDay = (d?: string | null) => (d ? new Date(`${d}T12:00:00Z`).toLocaleD
 
 /** Price history with the intrinsic-value line and 4 support-based buy levels below it; each level can become a buy alert. */
 export function BuyLevelsChart({ r }: { r: any }) {
+  useTheme();
   const router = useRouter();
   const plan = usePlan();
   const [w, setW] = useState(0);
@@ -122,6 +123,7 @@ export function BuyLevelsChart({ r }: { r: any }) {
 
 /** Line label on a small background so it stays readable over the price line. */
 function Label({ x, y, text, color, end }: { x: number; y: number; text: string; color: string; end?: boolean }) {
+  useTheme();
   const tw = text.length * 5.6 + 8;
   return (
     <>
@@ -131,7 +133,7 @@ function Label({ x, y, text, color, end }: { x: number; y: number; text: string;
   );
 }
 
-const s = StyleSheet.create({
+const s = themedStyles((colors) => ({
   section: { fontSize: 11, color: colors.muted, fontWeight: "700", textTransform: "uppercase", letterSpacing: 1, marginTop: spacing.md, marginBottom: 4 },
   ranges: { flexDirection: "row", gap: 6, marginBottom: spacing.sm },
   range: { height: 30, paddingHorizontal: spacing.md, borderRadius: radius.pill, backgroundColor: colors.surfaceTertiary, borderWidth: 1, borderColor: colors.border, justifyContent: "center" },
@@ -154,4 +156,4 @@ const s = StyleSheet.create({
   btnText: { fontSize: 12, fontWeight: "800", color: colors.onBrandPrimary },
   btnTextOn: { color: colors.onBrandTertiary },
   note: { fontSize: 11, color: colors.muted, marginTop: spacing.sm, lineHeight: 16 },
-});
+}));

@@ -1,10 +1,10 @@
 import React from "react";
-import { View, Text, StyleSheet, Pressable, ActivityIndicator, Modal, FlatList } from "react-native";
+import { View, Text, Pressable, ActivityIndicator, Modal, FlatList } from "react-native";
 import Icon from "@react-native-vector-icons/feather";
 import { useRouter } from "expo-router";
 
 import { Markdown } from "./Markdown";
-import { colors, spacing, radius } from "./theme";
+import { colors, spacing, radius, themedStyles, useTheme } from "./theme";
 
 export type ChatMsg = {
   id: string; role: "user" | "assistant"; content: string; model?: string; streaming?: boolean; error?: string;
@@ -12,6 +12,7 @@ export type ChatMsg = {
 };
 
 export function MessageBubble({ m }: { m: ChatMsg }) {
+  useTheme();
   if (m.role === "user") {
     return (
       <View testID="chat-msg-user" style={[s.bubble, s.user]}>
@@ -58,6 +59,7 @@ export function MessageBubble({ m }: { m: ChatMsg }) {
 }
 
 export function Suggestions({ items, onPick, disabled }: { items: string[]; onPick: (t: string) => void; disabled?: boolean }) {
+  useTheme();
   return (
     <View style={s.sugWrap}>
       {items.map((t, i) => (
@@ -74,6 +76,7 @@ type ChatRow = { chat_id: string; title: string; updated_at: string; last_model?
 
 /** Entry point into Ask AI with an optional pinned ticker / prefilled question. */
 export function AskAIButton({ label, ticker, prompt, testID }: { label: string; ticker?: string; prompt?: string; testID?: string }) {
+  useTheme();
   const router = useRouter();
   return (
     <Pressable testID={testID || "ask-ai"} onPress={() => router.push({ pathname: "/assistant", params: { ...(ticker ? { ticker } : {}), ...(prompt ? { prompt } : {}) } } as any)}
@@ -92,6 +95,7 @@ export function HistorySheet({ visible, chats, loading, onClose, onOpen, onDelet
   visible: boolean; chats: ChatRow[]; loading: boolean; onClose: () => void; onOpen: (id: string) => void;
   onDelete: (id: string) => void; bottom: number;
 }) {
+  useTheme();
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={s.backdrop} onPress={onClose} />
@@ -130,7 +134,7 @@ export function HistorySheet({ visible, chats, loading, onClose, onOpen, onDelet
   );
 }
 
-const s = StyleSheet.create({
+const s = themedStyles((colors) => ({
   bubble: { maxWidth: "88%", borderRadius: radius.lg, padding: spacing.md, marginBottom: spacing.md },
   user: { alignSelf: "flex-end", backgroundColor: colors.brandPrimary, borderBottomRightRadius: 4 },
   userText: { color: colors.onBrandPrimary, fontSize: 14, lineHeight: 20 },
@@ -150,8 +154,8 @@ const s = StyleSheet.create({
   sugWrap: { gap: spacing.sm, marginTop: spacing.md },
   sug: { flexDirection: "row", alignItems: "center", gap: spacing.sm, backgroundColor: colors.surfaceSecondary, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, paddingHorizontal: spacing.md, minHeight: 48, paddingVertical: spacing.sm },
   sugText: { flex: 1, fontSize: 13, color: colors.onSurface, fontWeight: "600", lineHeight: 18 },
-  backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.35)" },
-  sheet: { maxHeight: "75%", backgroundColor: colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingHorizontal: spacing.lg },
+  backdrop: { flex: 1, backgroundColor: colors.backdrop },
+  sheet: { maxHeight: "75%", backgroundColor: colors.sheet, borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingHorizontal: spacing.lg },
   grab: { alignSelf: "center", width: 40, height: 4, borderRadius: 2, backgroundColor: colors.borderStrong, marginTop: spacing.sm },
   sheetHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: spacing.sm },
   sheetTitle: { fontSize: 18, fontWeight: "800", color: colors.onSurface },
@@ -164,4 +168,4 @@ const s = StyleSheet.create({
   aiAvatarLg: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.brandPrimary, alignItems: "center", justifyContent: "center" },
   askTitle: { fontSize: 14, fontWeight: "800", color: colors.onBrandSecondary },
   askSub: { fontSize: 11, color: colors.onSurfaceSecondary, marginTop: 1 },
-});
+}));

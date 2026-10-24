@@ -1,8 +1,9 @@
 import React from "react";
-import { View, Text, StyleSheet } from "react-native";
-import { colors, radius, spacing } from "./theme";
+import { View, Text } from "react-native";
+import { colors, radius, spacing, themedStyles, useTheme } from "./theme";
 
 export function Sparkline({ data, width = 80, height = 26, up }: { data: number[]; width?: number; height?: number; up?: boolean }) {
+  useTheme();
   if (!data?.length) return null;
   const min = Math.min(...data), max = Math.max(...data), range = max - min || 1;
   const stepX = width / (data.length - 1);
@@ -40,6 +41,7 @@ export function Sparkline({ data, width = 80, height = 26, up }: { data: number[
 }
 
 export function MetricRow({ label, value, mono = true, color }: { label: string; value: string | number; mono?: boolean; color?: string }) {
+  useTheme();
   return (
     <View style={styles.row}>
       <Text style={styles.label}>{label}</Text>
@@ -49,8 +51,9 @@ export function MetricRow({ label, value, mono = true, color }: { label: string;
 }
 
 export function Badge({ text, kind = "info", testID }: { text: string; kind?: "info" | "success" | "error" | "warn" | "brand"; testID?: string }) {
-  const bg = kind === "success" ? colors.brandTertiary : kind === "error" ? "#FEE2E2" : kind === "warn" ? "#FEF3C7" : kind === "brand" ? colors.brandSecondary : colors.surfaceTertiary;
-  const fg = kind === "success" ? colors.onBrandTertiary : kind === "error" ? colors.error : kind === "warn" ? "#92400E" : kind === "brand" ? colors.onBrandSecondary : colors.onSurfaceSecondary;
+  useTheme();
+  const bg = kind === "success" ? colors.brandTertiary : kind === "error" ? colors.errorBg : kind === "warn" ? colors.warnBg : kind === "brand" ? colors.brandSecondary : colors.surfaceTertiary;
+  const fg = kind === "success" ? colors.onBrandTertiary : kind === "error" ? colors.error : kind === "warn" ? colors.onWarnBg : kind === "brand" ? colors.onBrandSecondary : colors.onSurfaceSecondary;
   return (
     <View testID={testID} style={[styles.badge, { backgroundColor: bg }]}>
       <Text style={[styles.badgeText, { color: fg }]}>{text}</Text>
@@ -58,11 +61,11 @@ export function Badge({ text, kind = "info", testID }: { text: string; kind?: "i
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   row: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 6 },
   label: { color: colors.muted, fontSize: 13 },
   val: { color: colors.onSurface, fontSize: 14, fontWeight: "600" },
   mono: { fontVariant: ["tabular-nums"] },
   badge: { paddingHorizontal: spacing.sm, paddingVertical: 4, borderRadius: radius.pill, alignSelf: "flex-start" },
   badgeText: { fontSize: 11, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5 },
-});
+}));

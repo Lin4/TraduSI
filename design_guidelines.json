@@ -1,59 +1,102 @@
 {
-  "app_name": "OptiScreen",
+  "app_name": "TraduSI",
   "personality": "1 iOS-Native Clean",
-  "personality_one_liner": "A highly readable, trustworthy trading command center that brings clarity to complex options data through crisp typography and structured layouts.",
+  "personality_one_liner": "A structured, deeply native financial interface that treats data clarity as the highest priority, using Apple's semantic layering for dark mode.",
   "color": {
-    "surface": "#FFFFFF",
-    "onSurface": "#111827",
-    "surfaceSecondary": "#F9FAFB",
-    "onSurfaceSecondary": "#374151",
-    "surfaceTertiary": "#F3F4F6",
-    "onSurfaceTertiary": "#4B5563",
-    "surfaceInverse": "#111827",
-    "onSurfaceInverse": "#FFFFFF",
-    "brand": "#115E59",
-    "brandPrimary": "#0F766E",
-    "onBrandPrimary": "#FFFFFF",
-    "brandSecondary": "#CCFBF1",
-    "onBrandSecondary": "#0F766E",
-    "brandTertiary": "#D1FAE5",
-    "onBrandTertiary": "#065F46",
-    "success": "#10B981",
-    "onSuccess": "#FFFFFF",
-    "warning": "#F59E0B",
-    "onWarning": "#FFFFFF",
-    "error": "#EF4444",
-    "onError": "#FFFFFF",
-    "info": "#6B7280",
-    "onInfo": "#FFFFFF",
-    "border": "#E5E7EB",
-    "borderStrong": "#D1D5DB",
-    "divider": "#F3F4F6",
-    "muted": "#9CA3AF"
+    "light": {
+      "warnBg": "#FEF3C7",
+      "onWarnBg": "#92400E",
+      "errorBg": "#FEE2E2",
+      "gainBg": "#ECFDF5",
+      "lossBg": "#FEF2F2",
+      "backdrop": "rgba(0,0,0,0.4)"
+    },
+    "dark": {
+      "surfaceSecondary": "#000000",
+      "onSurfaceSecondary": "#E5E5EA",
+      "surface": "#1C1C1E",
+      "onSurface": "#FFFFFF",
+      "surfaceTertiary": "#2C2C2E",
+      "onSurfaceTertiary": "#8E8E93",
+      "surfaceInverse": "#FFFFFF",
+      "onSurfaceInverse": "#000000",
+      "muted": "#9CA3AF",
+      "brand": "#14B8A6",
+      "onBrand": "#042F2E",
+      "brandPrimary": "#2DD4BF",
+      "onBrandPrimary": "#042F2E",
+      "brandSecondary": "#134E4A",
+      "onBrandSecondary": "#5EEAD4",
+      "brandTertiary": "#042F2E",
+      "onBrandTertiary": "#2DD4BF",
+      "success": "#34D399",
+      "onSuccess": "#022C22",
+      "warning": "#FBBF24",
+      "onWarning": "#451A03",
+      "error": "#F87171",
+      "onError": "#450A0A",
+      "info": "#9CA3AF",
+      "onInfo": "#111827",
+      "border": "#38383A",
+      "borderStrong": "#545456",
+      "divider": "#2C2C2E",
+      "valueVeryUnder": "#34D399",
+      "valueVeryUnderBg": "#022C22",
+      "valueUnder": "#6EE7B7",
+      "valueUnderBg": "#064E3B",
+      "valueFair": "#94A3B8",
+      "valueFairBg": "#1E293B",
+      "valueOver": "#FBBF24",
+      "valueOverBg": "#451A03",
+      "valueVeryOver": "#F87171",
+      "valueVeryOverBg": "#450A0A",
+      "chartValue": "#94A3B8",
+      "warnBg": "#451A03",
+      "onWarnBg": "#FBBF24",
+      "errorBg": "#450A0A",
+      "gainBg": "#022C22",
+      "lossBg": "#450A0A",
+      "backdrop": "rgba(0,0,0,0.7)"
+    }
   },
   "typography": {
-    "displayFontFamily": "Plus Jakarta Sans",
+    "displayFontFamily": "Geist",
     "textFontFamily": "Geist",
-    "scale": { "sm": 12, "base": 14, "lg": 16, "xl": 20, "2xl": 24 }
+    "scale": {
+      "sm": 12,
+      "base": 14,
+      "lg": 16,
+      "xl": 20,
+      "2xl": 24
+    }
   },
-  "spacing": { 
-    "rule": "Maintain generous vertical rhythm for readability, but use tight list grouping (xs/sm gaps) inside data-heavy options tables.",
-    "xs": 4, 
-    "sm": 8, 
-    "md": 12, 
-    "lg": 16, 
-    "xl": 24, 
-    "2xl": 32, 
-    "3xl": 48 
+  "spacing": {
+    "rule": "Handle spacing correctly dont have extra spaces where its not required, handle padding and margin corectly and subtle for buttons and components",
+    "xs": 4,
+    "sm": 8,
+    "md": 12,
+    "lg": 16,
+    "xl": 24,
+    "2xl": 32,
+    "3xl": 48
   },
-  "radius_tokens": { "sm": 6, "md": 12, "lg": 20, "pill": 999 },
-  "shadow_tier": 1,
+  "radius_tokens": {
+    "sm": 6,
+    "md": 12,
+    "lg": 20,
+    "pill": 999
+  },
+  "shadow_tier": "1",
   "navigation": "bottom_tabs",
-  "icon_set": "Phosphor",
+  "icon_set": "Feather",
   "glassmorphism": {
-    "enabled": true,
-    "do's": ["Bottom tab bar", "Sticky header background over scrolling screeners", "Custom Bottom Sheet handles for filters"],
-    "dont's": ["Body content cards", "Form inputs", "Data tables"]
+    "enabled": "true",
+    "do's": [
+      "Use glass on tab bar, sticky headers over scrolling content, and modal scrims."
+    ],
+    "dont's": [
+      "Do not use glass on standard list rows, data cards, or form inputs."
+    ]
   },
   "platform_libraries": {
     "glass": {
@@ -69,67 +112,22 @@
   },
   "screens": [
     {
-      "name": "Onboarding & Plans",
-      "purpose": "Guides users through account creation, tier selection (Free to Expert), and broker questionnaire.",
-      "states": { 
-        "loading": "Skeleton cards for pricing tiers", 
-        "empty": "N/A", 
-        "error": "Failed to load plans. Retry button." 
+      "name": "Profile",
+      "purpose": "User settings and app preferences, including appearance controls.",
+      "states": {
+        "loading": "Centered spinner",
+        "empty": "N/A",
+        "error": "Standard error message with retry"
       },
-      "layout": "Carousel or stacked list for Plan Selection. Forms use single column with label above. Sticky primary CTA at the bottom inside KeyboardAvoidingView."
-    },
-    {
-      "name": "Screener Home",
-      "purpose": "A dashboard to jump into specific stock filters, options scanners, or quick AI-driven strategies.",
-      "states": { 
-        "loading": "Shimmer rows for trending options", 
-        "empty": "Illustration of a chart with 'Set up your first screener'.", 
-        "error": "Could not fetch market data." 
-      },
-      "layout": "Search bar at top. Horizontal pill scroll for 'Day Trading', 'Swing', 'Long Term'. Vertical list of top N stocks with best options strategies."
-    },
-    {
-      "name": "Options Screener Results",
-      "purpose": "Data-dense display of options strategies with legs, probability, and risk/reward.",
-      "states": { 
-        "loading": "Spinner centered", 
-        "empty": "No strategies match your strict filters. Loosen Risk/Reward.", 
-        "error": "Error analyzing option chains." 
-      },
-      "layout": "Filter bar pinned at top. Rows show Ticker, Strategy Name, Pop%, Premium, and Sparkline. Use monospaced numbers for all financial metrics to align decimals."
-    },
-    {
-      "name": "Ticker Detail & Analytics",
-      "purpose": "Deep dive into a user-entered stock, showing charts, long-term financials, and top options plays.",
-      "states": { 
-        "loading": "Large chart skeleton + metrics skeletons", 
-        "empty": "No data available for this ticker.", 
-        "error": "Failed to retrieve ticker." 
-      },
-      "layout": "Hero price + delta. Candlestick/Line chart. Tabs for 'Technical', 'Fundamentals', 'Options'. Options tab lists strategies in expandable accordions."
+      "layout": "Standard iOS-style grouped list layout. The 'Appearance' setting should be a dedicated section containing a 3-option Segmented Control (System, Light, Dark). Container for the segmented control uses `surfaceTertiary` with `pill` radius. The selected indicator uses `surface` (or `brandPrimary` if preferred for strong emphasis, but iOS native standard is `surface` with a subtle shadow). Unselected options have `muted` text, selected options have `onSurface` text. Use Feather icons (smartphone, sun, moon) next to or above the text label inside each segment."
     }
   ],
-  "images": {
-    "apple_logo": { 
-      "url": "https://images.unsplash.com/photo-1621768216002-5ac171876625?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAxODF8MHwxfHNlYXJjaHwxfHwlMjJhcHBsZSUyMGxvZ28lMjB0cmFuc3BhcmVudCUyMHBuZyUyMnxlbnwwfHx8fDE3OTE3Mjc3NTZ8MA&ixlib=rb-4.1.0&q=85", 
-      "alt": "Apple Logo" 
-    },
-    "tesla_logo": { 
-      "url": "https://images.unsplash.com/photo-1662947475743-35a389428742?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NjZ8MHwxfHNlYXJjaHwxfHwlMjJ0ZXNsYSUyMGxvZ28lMjB0cmFuc3BhcmVudCUyMHBuZyUyMnxlbnwwfHx8fDE3OTE3Mjc3NTZ8MA&ixlib=rb-4.1.0&q=85", 
-      "alt": "Tesla Logo" 
-    },
-    "chart_abstract_hero": { 
-      "url": "https://images.unsplash.com/photo-1689732888407-310424e3a372?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjY2NzV8MHwxfHNlYXJjaHwyfHwlMjJtaW5pbWFsaXN0JTIwdHJhZGluZyUyMGNoYXJ0JTIwVUklMjBhYnN0cmFjdCUyMGlsbHVzdHJhdGlvbiUyMnxlbnwwfHx8fDE3OTE3Mjc3NTZ8MA&ixlib=rb-4.1.0&q=85", 
-      "alt": "Minimalist trading chart UI abstract illustration" 
-    }
-  },
+  "images": {},
   "instructions_to_main_agent": [
-    "Use Space Grotesk or another Mono font for all numbers, prices, metrics, and percentages. This is mandatory for trading legibility.",
-    "BANNED COLORS: Strictly adhere to the nuclear ban on all shades of blue, indigo, and purple. The app relies on Emerald and Moss Green for identity, paired with crisp whites/grays.",
-    "Screeners must handle data density elegantly. Implement horizontal scrolling or collapsible accordions for complex options legs.",
-    "Use `success` (Emerald) for positive gains/deltas, and `error` (Coral) for losses. Do not deviate from the provided hex codes.",
-    "Forms for Onboarding, Questionnaire, and Consent must have labels above inputs and a sticky primary CTA at the bottom inside a KeyboardAvoidingView.",
-    "Add tactile feedback (haptics) on filter selection, watchlist additions, and placing simulated/real trades.",
-    "Apply frosted glass (expo-blur) heavily on Sticky Headers and Bottom Tab Bars so underlying charts and data lists visually flow behind them natively."
+    "Implement the dark palette fully relying on Apple's standard semantic elevation: Screen background (`surfaceSecondary`) is pure #000000, and Cards (`surface`) are #1C1C1E. This maximizes OLED efficiency and contrast.",
+    "brandPrimary (#2DD4BF in dark mode) must be used for active tints, links, and filled buttons. The onBrandPrimary text color is #042F2E to maintain WCAG AA contrast for button text.",
+    "Removed blue for the chartValue per anti-patterns; replaced with a neutral slate (#94A3B8) which avoids conflicting with gain/loss/caution semantics in finance.",
+    "Added light/dark token pairs for warnBg, errorBg, gainBg, lossBg, and backdrop to eliminate hardcoded values.",
+    "Build the Appearance segmented control in Profile using native iOS feel. Recommended testIDs: `theme-picker-system`, `theme-picker-light`, `theme-picker-dark`."
   ]
 }

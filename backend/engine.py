@@ -984,7 +984,12 @@ def optiiq_value(price: float, metrics: Dict[str, Any], financials: List[Dict[st
     def done(v: Optional[float]) -> Dict[str, Any]:
         if not v or v <= 0:
             return {"available": False, "reason": "Not enough positive earnings or cash flow"}
+        if v > 10 * price:  # e.g. share-class mix-ups (BRK.B priced as B, EPS of A) or a broken market cap
+            return {"available": False, "reason": "Company data looks inconsistent, so no value is shown"}
         return {"available": True, "value": round(v, 2), "price": round(price, 2), "upside_pct": round((v / price - 1) * 100, 1)}
+
+    if (metrics.get("eps_ttm") or 0) > price:  # P/E below 1 means per-share data doesn't match this share price
+        return {"available": False, "reason": "Company data looks inconsistent, so no value is shown"}
 
     if any(k in sector.lower() for k in ("financ", "bank", "insurance", "capital markets")):
         bv = metrics.get("book_value_per_share_q")

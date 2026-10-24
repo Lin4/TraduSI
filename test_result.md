@@ -127,3 +127,9 @@
 - tradier.quotes() batch helper; market.recent_calls().
 - Frontend: src/ValuationBoard.tsx (5 colored group tabs w/ counts, search, sector chips, 4-col chip grid, progress bar while building), src/BuyLevelsChart.tsx (SVG price line + intrinsic line + 4 buy levels, 6M/1Y/2Y, "Buy alert" -> POST /api/alerts/add price_below note "Buy level Bx"), analyze.tsx Long-term shows the board under the form; tapping a chip runs the long analysis. alerts.tsx shows triggered state + price events.
 - needs_retesting: true
+
+## Iteration 28 (main agent) - Dark theme + Appearance picker
+- theme.ts: light + dark palettes (+ new tokens warnBg/onWarnBg/errorBg/gainBg/lossBg/backdrop); preference store System/Light/Dark saved in AsyncStorage ("theme_preference"); `colors` is a Proxy resolving to the active theme; `themedStyles(factory)` replaces StyleSheet.create in 45 files; every component calls useTheme() to re-render on switch; root layout loads the saved pref, wraps ThemeProvider + StatusBar.
+- profile.tsx: "Appearance" section with segmented control testIDs theme-picker-system / theme-picker-light / theme-picker-dark.
+- engine.optiiq_value sanity guard: EPS > price or value > 10x price -> available false ("Company data looks inconsistent") (fixes BRK.B $923,950 and SKYD outliers on the valuation board / Analyze).
+- needs_retesting: true (frontend)

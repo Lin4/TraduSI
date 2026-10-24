@@ -195,3 +195,7 @@ Research-first, transparent, trust-driven AI intelligence platform. AI acts as a
 - app.json "name" -> TraduSI (icon label). All in-app/backend copy TradeSI -> TraduSI (login, consent, Ask AI, assistant system prompt, Stripe/PayPal product names, buy-levels note). Bundle ID com.optiiq.app, slug and App Store config unchanged.
 - Store screenshots re-composed with TraduSI; zip renamed /app/store-assets/TraduSI_App_Store_Assets.zip.
 - EMAIL_FROM_NAME (email sender name) requested via secrets card to change to TraduSI.
+
+## Update (Jun 2026) - Dark theme
+- src/theme.ts: dark palette (design_guidelines.json, but screens=surface #000 / cards=surfaceSecondary #1C1C1E), System/Light/Dark preference (AsyncStorage theme_preference), colors Proxy + themedStyles() + useTheme() subscription in every component. Profile > Appearance segmented control.
+- OptiIQ sanity guard (EPS > price or value > 10x price -> no value) to drop share-class / bad market-cap outliers (BRK.B, SKYD).

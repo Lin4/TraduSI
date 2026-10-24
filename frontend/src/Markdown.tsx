@@ -1,9 +1,10 @@
 import React from "react";
-import { View, Text, StyleSheet } from "react-native";
-import { colors, spacing } from "./theme";
+import { View, Text } from "react-native";
+import { spacing, themedStyles, useTheme } from "./theme";
 
 /** Tiny markdown renderer for AI answers: ### headings, - bullets, 1. lists, **bold**. */
 export function Markdown({ text, testID }: { text: string; testID?: string }) {
+  useTheme();
   const lines = text.replace(/\r/g, "").split("\n");
   return (
     <View testID={testID}>
@@ -40,7 +41,7 @@ function inline(t: string) {
   );
 }
 
-const s = StyleSheet.create({
+const s = themedStyles((colors) => ({
   h: { fontSize: 15, fontWeight: "800", color: colors.onSurface, marginTop: spacing.sm, marginBottom: 2 },
   // plain paragraphs must NOT flex: on native a column child with flex:1 grows into large empty gaps
   p: { fontSize: 14, lineHeight: 21, color: colors.onSurface },
@@ -49,4 +50,4 @@ const s = StyleSheet.create({
   li: { flexDirection: "row", gap: 6, paddingLeft: 2, marginTop: 2 },
   dot: { fontSize: 14, lineHeight: 21, color: colors.brandPrimary, fontWeight: "900" },
   num: { fontSize: 14, lineHeight: 21, color: colors.brandPrimary, fontWeight: "800", minWidth: 16 },
-});
+}));

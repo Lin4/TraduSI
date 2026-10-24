@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
-import { View, Text, StyleSheet, Pressable, TextInput, Platform } from "react-native";
+import { View, Text, Pressable, TextInput, Platform } from "react-native";
 import Icon from "@react-native-vector-icons/feather";
 
-import { colors, spacing, radius } from "./theme";
+import { colors, spacing, radius, themedStyles, useTheme } from "./theme";
 
 export const CODE_LEN = 6;
 
@@ -11,6 +11,7 @@ export function CodeInput({ value, onChange, onComplete, error, hint, testID = "
   value: string; onChange: (v: string) => void; onComplete?: (v: string) => void; error?: string; hint?: string;
   testID?: string; autoFocus?: boolean;
 }) {
+  useTheme();
   const input = useRef<TextInput>(null);
   const [focused, setFocused] = useState(false);
 
@@ -71,6 +72,7 @@ export function useCountdown(initial: number) {
 }
 
 export function ResendRow({ wait, sending, onResend, testID = "code" }: { wait: number; sending: boolean; onResend: () => void; testID?: string }) {
+  useTheme();
   const mmss = `${Math.floor(wait / 60)}:${String(wait % 60).padStart(2, "0")}`;
   return (
     <View style={styles.resendRow}>
@@ -86,7 +88,7 @@ export function ResendRow({ wait, sending, onResend, testID = "code" }: { wait: 
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   boxes: { flexDirection: "row", justifyContent: "space-between", gap: spacing.sm },
   box: {
     flex: 1, aspectRatio: 0.85, maxHeight: 64, borderRadius: radius.md, borderWidth: 1.5, borderColor: colors.border,
@@ -103,4 +105,4 @@ const styles = StyleSheet.create({
   resendBtn: { flexDirection: "row", alignItems: "center", gap: 6, minHeight: 44, paddingHorizontal: spacing.md },
   muted: { fontSize: 13, color: colors.muted },
   link: { color: colors.brandPrimary, fontWeight: "700", fontSize: 13 },
-});
+}));

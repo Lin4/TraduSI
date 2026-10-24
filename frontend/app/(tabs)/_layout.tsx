@@ -3,11 +3,12 @@ import { Platform } from "react-native";
 import { Tabs } from "expo-router";
 import Icon from "@react-native-vector-icons/feather";
 
-import { colors } from "@/src/theme";
+import { colors, useTheme } from "@/src/theme";
 
 export const usesNativeTabs = Platform.OS === "ios" && parseInt(String(Platform.Version), 10) >= 26;
 
 export default function TabsLayout() {
+  useTheme();
   return (
     <Tabs
       screenOptions={{

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, Pressable } from "react-native";
+import { View, Text, Pressable } from "react-native";
 import Icon from "@react-native-vector-icons/feather";
 
 import { api } from "./api";
@@ -9,13 +9,14 @@ import { Badge } from "./parts";
 import { money, DailyPnLChart } from "./pnl";
 import { RollSheet } from "./RollSheet";
 import { ThresholdField, toThreshold, Thr } from "./SaveStrategy";
-import { colors, spacing, radius } from "./theme";
+import { colors, spacing, radius, themedStyles, useTheme } from "./theme";
 
 const thrText = (t: any, usd: number | null) =>
   t ? `${t.mode === "pct" ? `${t.value}%` : `$${t.value}`}${usd != null && t.mode === "pct" ? ` ($${Math.round(usd)})` : ""}` : "—";
 
 /** Saved strategies with live P&L, progress between stop and target, inline edit/delete. */
 export function StrategiesList({ items, total, onChanged }: { items: any[]; total: number; onChanged: () => void }) {
+  useTheme();
   if (!items.length) return null;
   return (
     <View testID="strategies-section">
@@ -29,6 +30,7 @@ export function StrategiesList({ items, total, onChanged }: { items: any[]; tota
 }
 
 function StrategyCard({ it, onChanged }: { it: any; onChanged: () => void }) {
+  useTheme();
   const [open, setOpen] = useState(false);
   const [target, setTarget] = useState<Thr>({ mode: it.target?.mode || "pct", value: it.target ? String(it.target.value) : "" });
   const [stop, setStop] = useState<Thr>({ mode: it.stop?.mode || "pct", value: it.stop ? String(it.stop.value) : "" });
@@ -129,6 +131,7 @@ function StrategyCard({ it, onChanged }: { it: any; onChanged: () => void }) {
 export function ClosedHistory({ items, archived, insights, total, onChanged }: {
   items: any[]; archived: any[]; insights: any; total: number; onChanged: () => void;
 }) {
+  useTheme();
   const [showArchived, setShowArchived] = useState(false);
   if (!items.length && !archived.length) return null;
   const list = showArchived ? archived : items;
@@ -155,6 +158,7 @@ export function ClosedHistory({ items, archived, insights, total, onChanged }: {
 }
 
 function ClosedRow({ c, onChanged }: { c: any; onChanged: () => void }) {
+  useTheme();
   const [armed, setArmed] = useState(false);
   const archive = async () => {
     try {
@@ -185,6 +189,7 @@ function ClosedRow({ c, onChanged }: { c: any; onChanged: () => void }) {
 }
 
 function HistoryInsights({ ins }: { ins: any }) {
+  useTheme();
   const o = ins.overall;
   const c = (v: number | null) => (v == null ? colors.muted : v >= 0 ? colors.success : colors.error);
   return (
@@ -217,7 +222,7 @@ function HistoryInsights({ ins }: { ins: any }) {
   );
 }
 
-const s = StyleSheet.create({
+const s = themedStyles((colors) => ({
   seg: { flexDirection: "row", backgroundColor: colors.surfaceTertiary, borderRadius: radius.md, padding: 3, marginVertical: spacing.sm },
   segBtn: { flex: 1, height: 34, alignItems: "center", justifyContent: "center", borderRadius: radius.sm },
   segOn: { backgroundColor: colors.surface },
@@ -258,4 +263,4 @@ const s = StyleSheet.create({
   leg: { fontSize: 12, color: colors.onSurfaceSecondary, marginBottom: 3 },
   delete: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, minHeight: 44, marginTop: spacing.sm },
   deleteText: { color: colors.error, fontWeight: "700" },
-});
+}));

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from "react";
 import { Animated, StyleSheet, Text, View } from "react-native";
-import { colors, radius, spacing } from "./theme";
+import { colors, radius, spacing, useTheme } from "./theme";
 
 type ToastItem = { id: number; message: string; type: "success" | "error" | "info" };
 let listeners: ((t: ToastItem) => void)[] = [];
@@ -12,6 +12,7 @@ export function toast(message: string, type: ToastItem["type"] = "info") {
 }
 
 export function ToastHost() {
+  useTheme();
   const [items, setItems] = React.useState<ToastItem[]>([]);
   useEffect(() => {
     const l = (t: ToastItem) => {
@@ -29,6 +30,7 @@ export function ToastHost() {
 }
 
 function ToastView({ item }: { item: ToastItem }) {
+  useTheme();
   const a = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     Animated.sequence([

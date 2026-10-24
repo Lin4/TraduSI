@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, Switch, KeyboardAvoidingView, Platform } from "react-native";
+import { View, Text, ScrollView, Pressable, Switch, KeyboardAvoidingView, Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import Icon from "@react-native-vector-icons/feather";
@@ -9,11 +9,12 @@ import { Input } from "@/src/Input";
 import { Button } from "@/src/Button";
 import { ToastHost, toast } from "@/src/Toast";
 import { Badge } from "@/src/parts";
-import { colors, spacing, radius } from "@/src/theme";
+import { colors, spacing, radius, themedStyles, useTheme } from "@/src/theme";
 
 const AUD = [["all", "All users"], ["trial", "Trial"], ["simple", "Simple"], ["advance", "Advance"], ["expert", "Expert"], ["expired", "Expired"]];
 
 export default function AdminBroadcast() {
+  useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [title, setTitle] = useState("");
@@ -102,7 +103,7 @@ export default function AdminBroadcast() {
   );
 }
 
-const s = StyleSheet.create({
+const s = themedStyles((colors) => ({
   header: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingHorizontal: spacing.lg, paddingBottom: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.divider },
   back: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.surfaceTertiary, alignItems: "center", justifyContent: "center" },
   title: { fontSize: 20, fontWeight: "800", color: colors.onSurface },
@@ -126,4 +127,4 @@ const s = StyleSheet.create({
   meta: { fontSize: 11, color: colors.muted, marginTop: 6 },
   end: { minHeight: 40, justifyContent: "center", alignItems: "flex-start", marginTop: 4 },
   endText: { color: colors.error, fontWeight: "700", fontSize: 13 },
-});
+}));

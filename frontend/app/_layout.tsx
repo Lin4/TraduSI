@@ -1,6 +1,6 @@
 import { QueryClientProvider, useQueryClient } from "@tanstack/react-query";
-import { Stack, useRouter, useSegments } from "expo-router";
-import { useEffect, useRef, useState } from "react";
+import { Stack, useRouter, useSegments, ThemeProvider, DarkTheme, DefaultTheme } from "expo-router";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { LogBox, Platform, View, ActivityIndicator, Text } from "react-native";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -9,11 +9,13 @@ import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
 import * as Notifications from "expo-notifications";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { StatusBar } from "expo-status-bar";
+import * as SystemUI from "expo-system-ui";
 
 import { ErrorBoundary } from "@/src/components/error-boundary";
 import { queryClient } from "@/src/query-client";
 import { AuthProvider, useAuth } from "@/src/auth";
-import { colors } from "@/src/theme";
+import { colors, useTheme, loadThemePreference } from "@/src/theme";
 import { registerForPush } from "@/src/push";
 import Purchases from "react-native-purchases";
 import { initializeRevenueCat, SubscriptionProvider, rcEnabled } from "@/src/revenuecat";
@@ -54,6 +56,7 @@ function extractSessionId(url: string | null | undefined): string | null {
 }
 
 function AuthGate({ children }: { children: React.ReactNode }) {
+  useTheme();
   const { user, loading, exchangeSessionId } = useAuth();
   const router = useRouter();
   const segments = useSegments();
@@ -192,17 +195,30 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 }
 
 export default function RootLayout() {
+  const { scheme } = useTheme();
+  const [themeReady, setThemeReady] = useState(false);
+  useEffect(() => { loadThemePreference().finally(() => setThemeReady(true)); }, []);
+  useEffect(() => { SystemUI.setBackgroundColorAsync(colors.surface).catch(() => {}); }, [scheme]);
+  const navTheme = useMemo(() => {
+    const base = scheme === "dark" ? DarkTheme : DefaultTheme;
+    return { ...base, colors: { ...base.colors, primary: colors.brandPrimary, background: colors.surface, card: colors.surface, text: colors.onSurface, border: colors.border } };
+  }, [scheme]);
+  if (!themeReady) return null; // saved theme loads in a few ms; avoids a light flash for dark-mode users
+
   return (
     <ErrorBoundary>
-      <GestureHandlerRootView style={{ flex: 1 }}>
+      <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.surface }}>
         <SafeAreaProvider>
           <QueryClientProvider client={queryClient}>
             <KeyboardProvider>
               <SubscriptionProvider>
                 <AuthProvider>
-                  <AuthGate>
-                    <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.surface } }} />
-                  </AuthGate>
+                  <ThemeProvider value={navTheme}>
+                    <StatusBar style={scheme === "dark" ? "light" : "dark"} />
+                    <AuthGate>
+                      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.surface } }} />
+                    </AuthGate>
+                  </ThemeProvider>
                 </AuthProvider>
               </SubscriptionProvider>
             </KeyboardProvider>

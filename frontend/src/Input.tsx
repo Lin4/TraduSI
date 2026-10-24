@@ -1,7 +1,7 @@
 import React, { useState } from "react";
-import { View, Text, TextInput, StyleSheet, KeyboardTypeOptions, Pressable } from "react-native";
+import { View, Text, TextInput, KeyboardTypeOptions, Pressable } from "react-native";
 import Icon from "@react-native-vector-icons/feather";
-import { colors, radius, spacing } from "./theme";
+import { colors, radius, spacing, themedStyles, useTheme } from "./theme";
 
 type Props = {
   label: string;
@@ -15,6 +15,7 @@ type Props = {
 };
 
 export function Input({ label, value, onChangeText, placeholder, secureTextEntry, keyboardType, autoCapitalize, testID }: Props) {
+  const { scheme } = useTheme();
   const [visible, setVisible] = useState(false);
   return (
     <View style={{ marginBottom: spacing.lg }}>
@@ -26,6 +27,7 @@ export function Input({ label, value, onChangeText, placeholder, secureTextEntry
           onChangeText={onChangeText}
           placeholder={placeholder}
           placeholderTextColor={colors.muted}
+          keyboardAppearance={scheme}
           secureTextEntry={secureTextEntry && !visible}
           keyboardType={keyboardType}
           autoCapitalize={autoCapitalize ?? "none"}
@@ -49,7 +51,7 @@ export function Input({ label, value, onChangeText, placeholder, secureTextEntry
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   label: { color: colors.onSurface, fontSize: 13, fontWeight: "600", marginBottom: spacing.xs },
   wrap: { position: "relative", justifyContent: "center" },
   input: {
@@ -63,4 +65,4 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   eye: { position: "absolute", right: 4, width: 44, height: 44, alignItems: "center", justifyContent: "center" },
-});
+}));

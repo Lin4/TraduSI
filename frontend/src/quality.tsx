@@ -1,8 +1,8 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, Pressable } from "react-native";
+import { View, Text, Pressable } from "react-native";
 import Icon from "@react-native-vector-icons/feather";
 
-import { colors, spacing, radius } from "./theme";
+import { colors, spacing, radius, themedStyles, useTheme } from "./theme";
 import { ScoreRing, EquityCurve, Gauge, money, signed, tone } from "./quantcharts";
 
 const PILLARS: [string, string, string][] = [
@@ -17,6 +17,7 @@ export function Section({ icon, title, summary, children, initiallyOpen = false,
   icon: string; title: string; summary?: string; children: React.ReactNode; initiallyOpen?: boolean; testID?: string;
   badge?: { text: string; color: string };
 }) {
+  useTheme();
   const [open, setOpen] = useState(initiallyOpen);
   return (
     <View testID={testID} style={s.section}>
@@ -38,6 +39,7 @@ export function Section({ icon, title, summary, children, initiallyOpen = false,
 }
 
 function Row({ label, value, color, sub }: { label: string; value: string; color?: string; sub?: string }) {
+  useTheme();
   return (
     <View style={s.row}>
       <View style={{ flex: 1 }}>
@@ -51,6 +53,7 @@ function Row({ label, value, color, sub }: { label: string; value: string; color
 
 /** Small score pill for result cards. */
 export function OptiScorePill({ score, grade }: { score?: number; grade?: string }) {
+  useTheme();
   if (score == null) return null;
   return (
     <View testID="optiscore-pill" style={[s.pill, { borderColor: tone(score) }]}>
@@ -65,6 +68,7 @@ const histOf = (r: any) => r.validation?.backtest?.hold_to_expiry;
 
 /** The 5-stage pipeline at a glance: Scan → Rank → Plan → Validate → Track. */
 export function PipelineStrip({ r }: { r: any }) {
+  useTheme();
   const h = histOf(r);
   const steps = [
     { icon: "radio", label: "Scan", value: r.scan ? `${r.scan.liquidity.grade} liq.` : "—", ok: r.scan?.liquidity?.grade !== "Low" },
@@ -79,11 +83,11 @@ export function PipelineStrip({ r }: { r: any }) {
       {steps.map((st, i) => (
         <React.Fragment key={st.label}>
           <View testID={`pipeline-${st.label.toLowerCase()}`} style={s.pipeStep}>
-            <View style={[s.pipeDot, { backgroundColor: st.ok ? colors.brandSecondary : "#FEF3C7" }]}>
-              <Icon name={st.icon as any} size={13} color={st.ok ? colors.brandPrimary : "#92400E"} />
+            <View style={[s.pipeDot, { backgroundColor: st.ok ? colors.brandSecondary : colors.warnBg }]}>
+              <Icon name={st.icon as any} size={13} color={st.ok ? colors.brandPrimary : colors.onWarnBg} />
             </View>
             <Text style={s.pipeLabel}>{i + 1}. {st.label}</Text>
-            <Text style={[s.pipeVal, !st.ok && { color: "#92400E" }]} numberOfLines={1}>{st.value}</Text>
+            <Text style={[s.pipeVal, !st.ok && { color: colors.onWarnBg }]} numberOfLines={1}>{st.value}</Text>
           </View>
           {i < steps.length - 1 ? <View style={s.pipeLine} /> : null}
         </React.Fragment>
@@ -94,6 +98,7 @@ export function PipelineStrip({ r }: { r: any }) {
 
 /** 0-100 OptiScore with the 4 pillars. */
 export function OptiScoreCard({ r }: { r: any }) {
+  useTheme();
   if (r.optiscore == null) return null;
   const p = r.pillars || {};
   const ranked = PILLARS.map(([k, label]) => ({ k, label, v: p[k] ?? 0 })).sort((a, b) => b.v - a.v);
@@ -134,6 +139,7 @@ export function OptiScoreCard({ r }: { r: any }) {
 
 /** Stage 3: management plan for an options idea. */
 export function PlanCard({ plan, pop }: { plan: any; pop?: number }) {
+  useTheme();
   if (!plan) return null;
   const z = plan.sizing;
   const loss = plan.stop.loss, gain = plan.take_profit.gain;
@@ -184,6 +190,7 @@ export function PlanCard({ plan, pop }: { plan: any; pop?: number }) {
 }
 
 function PlanBox({ label, value, color, sub }: { label: string; value: string; color?: string; sub?: string }) {
+  useTheme();
   return (
     <View style={s.planBox}>
       <Text style={s.planBoxLabel}>{label}</Text>
@@ -194,6 +201,7 @@ function PlanBox({ label, value, color, sub }: { label: string; value: string; c
 }
 
 function Step({ n, icon, title, lines }: { n: number; icon: string; title: string; lines: string[] }) {
+  useTheme();
   return (
     <View style={s.step}>
       <View style={s.stepNum}><Text style={s.stepNumText}>{n}</Text></View>
@@ -220,6 +228,7 @@ function verdictOf(v: any, pop: number) {
 
 /** Stage 4: own-history backtest, costs, stress tests. */
 export function ValidationCard({ v, pop }: { v: any; pop: number }) {
+  useTheme();
   if (!v) return null;
   const bt = v.backtest;
   const h = bt?.hold_to_expiry;
@@ -302,6 +311,7 @@ export function ValidationCard({ v, pop }: { v: any; pop: number }) {
 }
 
 function WinBar({ label, value, color }: { label: string; value: number; color: string }) {
+  useTheme();
   return (
     <View style={s.winRow}>
       <Text style={s.winLabel}>{label}</Text>
@@ -312,6 +322,7 @@ function WinBar({ label, value, color }: { label: string; value: number; color: 
 }
 
 function BtRow({ label, a, b, sub, colorA, colorB }: { label: string; a: any; b?: any; sub?: string; colorA?: boolean; colorB?: boolean }) {
+  useTheme();
   const c = (x?: boolean) => (x == null ? colors.onSurface : x ? colors.success : colors.error);
   return (
     <View style={s.btRow}>
@@ -327,6 +338,7 @@ function BtRow({ label, a, b, sub, colorA, colorB }: { label: string; a: any; b?
 
 /** Stage 1: market scan report for the ticker. */
 export function ScanCard({ scan }: { scan: any }) {
+  useTheme();
   if (!scan) return null;
   const v = scan.volatility, a = scan.options_activity, f = scan.fundamentals, l = scan.liquidity;
   const pct = (x?: number | null) => (x != null ? `${(x * 100).toFixed(1)}%` : "—");
@@ -389,6 +401,7 @@ export function ScanCard({ scan }: { scan: any }) {
 }
 
 function Tile({ label, value, color }: { label: string; value: string; color?: string }) {
+  useTheme();
   return (
     <View style={s.tile}>
       <Text style={s.planBoxLabel}>{label}</Text>
@@ -397,7 +410,7 @@ function Tile({ label, value, color }: { label: string; value: string; color?: s
   );
 }
 
-const s = StyleSheet.create({
+const s = themedStyles((colors) => ({
   section: { backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, marginTop: spacing.md, overflow: "hidden" },
   sectionHead: { flexDirection: "row", alignItems: "center", gap: spacing.md, padding: spacing.md, minHeight: 60 },
   iconWrap: { width: 34, height: 34, borderRadius: 17, backgroundColor: colors.brandSecondary, alignItems: "center", justifyContent: "center" },
@@ -493,4 +506,4 @@ const s = StyleSheet.create({
   partRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginTop: 4 },
   partLabel: { width: 112, fontSize: 12, color: colors.onSurfaceSecondary },
   partVal: { width: 28, textAlign: "right", fontSize: 12, fontWeight: "800", fontVariant: ["tabular-nums"] },
-});
+}));

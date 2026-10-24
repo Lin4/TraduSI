@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable } from "react-native";
+import { View, Text, ScrollView, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
 import Icon from "@react-native-vector-icons/feather";
@@ -7,10 +7,11 @@ import Icon from "@react-native-vector-icons/feather";
 import { api } from "@/src/api";
 import { Badge } from "@/src/parts";
 import { useTTS } from "@/src/voice";
-import { colors, spacing, radius } from "@/src/theme";
+import { colors, spacing, radius, themedStyles, useTheme } from "@/src/theme";
 import { usePlan } from "@/src/plans";
 
 export default function Learn() {
+  useTheme();
   const insets = useSafeAreaInsets();
   const [cards, setCards] = useState<any[]>([]);
   const [open, setOpen] = useState<string | null>(null);
@@ -125,6 +126,7 @@ export default function Learn() {
 }
 
 function Row({ icon, color, text }: { icon: string; color: string; text: string }) {
+  useTheme();
   return (
     <View style={styles.listRow}>
       <Icon name={icon as any} size={13} color={color} />
@@ -133,7 +135,7 @@ function Row({ icon, color, text }: { icon: string; color: string; text: string 
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   header: { paddingHorizontal: spacing.lg, paddingBottom: spacing.sm, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.divider },
   title: { fontSize: 26, fontWeight: "800", color: colors.onSurface, letterSpacing: -0.5 },
   sub: { fontSize: 13, color: colors.muted, marginTop: 2 },
@@ -162,4 +164,4 @@ const styles = StyleSheet.create({
 
   audioBtn: { flexDirection: "row", gap: 6, alignItems: "center", paddingHorizontal: spacing.md, paddingVertical: 8, backgroundColor: colors.brandSecondary, borderRadius: radius.pill },
   audioText: { color: colors.brandPrimary, fontWeight: "700", fontSize: 12 },
-});
+}));

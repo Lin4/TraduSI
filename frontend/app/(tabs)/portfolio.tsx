@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from "react";
-import { View, Text, StyleSheet, Pressable, ScrollView, RefreshControl } from "react-native";
+import { View, Text, Pressable, ScrollView, RefreshControl } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
 import Icon from "@react-native-vector-icons/feather";
@@ -10,16 +10,18 @@ import { Button } from "@/src/Button";
 import { ToastHost, toast } from "@/src/Toast";
 import { Sparkline } from "@/src/parts";
 import { LoadingSkeleton } from "@/src/charts";
-import { colors, spacing, radius } from "@/src/theme";
+import { colors, spacing, radius, themedStyles, useTheme } from "@/src/theme";
 import { PlanGate } from "@/src/plans";
 import { StrategiesList, ClosedHistory } from "@/src/StrategiesList";
 import { AskAIButton } from "@/src/ChatParts";
 
 export default function PortfolioGated() {
+  useTheme();
   return <PlanGate><Portfolio /></PlanGate>;
 }
 
 function Portfolio() {
+  useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [items, setItems] = useState<any[]>([]);
@@ -148,7 +150,7 @@ function Portfolio() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   header: { paddingHorizontal: spacing.lg, paddingBottom: spacing.md, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.divider },
   title: { fontSize: 26, fontWeight: "800", color: colors.onSurface, letterSpacing: -0.5 },
   sub: { fontSize: 13, color: colors.muted, marginTop: 2 },
@@ -172,4 +174,4 @@ const styles = StyleSheet.create({
   stratEmpty: { flexDirection: "row", alignItems: "center", gap: spacing.sm, padding: spacing.md, borderRadius: radius.lg, borderWidth: 1, borderStyle: "dashed", borderColor: colors.borderStrong, marginBottom: spacing.lg },
   stratEmptyText: { flex: 1, fontSize: 13, color: colors.onSurfaceSecondary },
   emptyText: { color: colors.muted, textAlign: "center", fontSize: 13, lineHeight: 18 },
-});
+}));

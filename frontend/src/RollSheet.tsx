@@ -1,15 +1,16 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, Modal, Pressable, ScrollView, ActivityIndicator } from "react-native";
+import { View, Text, Modal, Pressable, ScrollView, ActivityIndicator } from "react-native";
 import Icon from "@react-native-vector-icons/feather";
 
 import { api } from "./api";
 import { Button } from "./Button";
 import { toast } from "./Toast";
 import { money } from "./pnl";
-import { colors, spacing, radius } from "./theme";
+import { colors, spacing, radius, themedStyles, useTheme } from "./theme";
 
 /** Pick a later expiration, preview live roll fills, confirm. */
 export function RollSheet({ it, visible, onClose, onDone }: { it: any; visible: boolean; onClose: () => void; onDone: () => void }) {
+  useTheme();
   const [exps, setExps] = useState<{ date: string; dte: number }[]>([]);
   const [pick, setPick] = useState<string | null>(null);
   const [preview, setPreview] = useState<any>(null);
@@ -84,9 +85,9 @@ export function RollSheet({ it, visible, onClose, onDone }: { it: any; visible: 
   );
 }
 
-const s = StyleSheet.create({
-  wrap: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.4)" },
-  sheet: { backgroundColor: colors.surface, padding: spacing.xl, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 40 },
+const s = themedStyles((colors) => ({
+  wrap: { flex: 1, justifyContent: "flex-end", backgroundColor: colors.backdrop },
+  sheet: { backgroundColor: colors.sheet, padding: spacing.xl, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 40 },
   head: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   title: { fontSize: 18, fontWeight: "800", color: colors.onSurface, flex: 1 },
   close: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.surfaceTertiary, alignItems: "center", justifyContent: "center" },
@@ -103,4 +104,4 @@ const s = StyleSheet.create({
   kpi: { flex: 1, backgroundColor: colors.surfaceSecondary, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.sm },
   kLabel: { fontSize: 10, color: colors.muted, fontWeight: "700" },
   kVal: { fontSize: 15, fontWeight: "800", color: colors.onSurface, marginTop: 2 },
-});
+}));

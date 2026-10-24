@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { View, Text, StyleSheet, LayoutChangeEvent } from "react-native";
 import Svg, { Line, Polyline, Circle, Text as SvgText } from "react-native-svg";
-import { colors, spacing, radius } from "./theme";
+import { colors, spacing, radius, themedStyles, useTheme } from "./theme";
 
 export const money = (v: number | null | undefined) => {
   if (v == null) return "∞";
@@ -14,6 +14,7 @@ type Pt = { price: number; expiry: number; today: number };
 
 /** P&L by underlying price: expiration (green above / red below zero) and today (dashed). */
 export function PnLChart({ curve, price, breakevens }: { curve: Pt[]; price: number; breakevens: number[] }) {
+  useTheme();
   const [w, setW] = useState(0);
   const h = 200, padL = 8, padR = 8, padT = 16, padB = 22;
   const geo = useMemo(() => {
@@ -65,6 +66,7 @@ type Heat = { columns: { date: string; days_left: number }[]; rows: { move_pct: 
 
 /** Price move (rows) × date (columns) P&L grid, green = profit, red = loss. */
 export function PnLHeatmap({ data }: { data: Heat }) {
+  useTheme();
   const maxAbs = Math.max(1, ...data.rows.flatMap((r) => r.pnl.map(Math.abs)));
   return (
     <View testID="pnl-heatmap" style={st.heat}>
@@ -100,7 +102,7 @@ export function PnLHeatmap({ data }: { data: Heat }) {
   );
 }
 
-const st = StyleSheet.create({
+const st = themedStyles((colors) => ({
   chartBox: { backgroundColor: colors.surfaceSecondary, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, paddingVertical: spacing.sm, marginBottom: spacing.md },
   legend: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: spacing.md, marginTop: 4 },
   dot: { width: 10, height: 3, borderRadius: 2 },
@@ -115,10 +117,11 @@ const st = StyleSheet.create({
   heatCell: { flex: 1, height: 32, alignItems: "center", justifyContent: "center" },
   heatCellText: { fontSize: 10.5, fontWeight: "800", fontVariant: ["tabular-nums"] },
   heatNote: { fontSize: 10, color: colors.muted, marginTop: 4, textAlign: "center" },
-});
+}));
 
 /** Day-by-day P&L line for a saved strategy (one point per day). */
 export function DailyPnLChart({ points }: { points: { date: string; pnl: number }[] }) {
+  useTheme();
   const [w, setW] = useState(0);
   const h = 110, pad = 14;
   const geo = useMemo(() => {

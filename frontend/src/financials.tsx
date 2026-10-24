@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, Pressable } from "react-native";
+import { View, Text, Pressable } from "react-native";
 
 import { MetricRow } from "./parts";
 import { api } from "./api";
-import { colors, spacing, radius } from "./theme";
+import { colors, spacing, radius, themedStyles, useTheme } from "./theme";
 
 const big = (v: number | null | undefined) => {
   if (v == null) return "—";
@@ -29,6 +29,7 @@ const MEASURES: [string, string, (v: any) => string][] = [
 ];
 
 export function ValuationMeasures({ m, buy, sell }: { m: Record<string, any>; buy?: number | null; sell?: number | null }) {
+  useTheme();
   return (
     <View testID="valuation-measures">
       {MEASURES.map(([k, label, fmt]) => <MetricRow key={k} label={label} value={fmt(m?.[k])} />)}
@@ -38,15 +39,17 @@ export function ValuationMeasures({ m, buy, sell }: { m: Record<string, any>; bu
   );
 }
 
+// getters so each read returns the active theme's color
 const SERIES = [
-  { key: "revenue", label: "Total revenue", color: colors.brandPrimary },
-  { key: "net_income", label: "Net income", color: colors.success },
-  { key: "operating_cash_flow", label: "Operating cash flow", color: colors.info },
-  { key: "free_cash_flow", label: "Free cash flow", color: colors.warning },
+  { key: "revenue", label: "Total revenue", get color() { return colors.brandPrimary; } },
+  { key: "net_income", label: "Net income", get color() { return colors.success; } },
+  { key: "operating_cash_flow", label: "Operating cash flow", get color() { return colors.info; } },
+  { key: "free_cash_flow", label: "Free cash flow", get color() { return colors.warning; } },
 ];
 
 /** Grouped bar chart of the last 3 quarters + details table. */
 export function FinancialsChart({ rows: all, source }: { rows: any[]; source?: string }) {
+  useTheme();
   const [hidden, setHidden] = useState<Record<string, boolean>>({});
   const [n, setN] = useState(3);
   if (!all?.length) return <Text style={s.empty}>Quarterly filings aren&apos;t available for this ticker.</Text>;
@@ -110,6 +113,7 @@ export function FinancialsChart({ rows: all, source }: { rows: any[]; source?: s
 
 /** Debt vs equity bars + debt-to-equity per quarter. */
 export function BalanceSheet({ rows }: { rows: any[] }) {
+  useTheme();
   const data = (rows || []).filter((r) => r.equity != null || r.total_debt != null);
   if (!data.length) return <Text style={s.empty}>Balance sheet data isn&apos;t available in recent filings for this ticker.</Text>;
   const max = Math.max(1, ...data.flatMap((r) => [Math.abs(r.total_debt || 0), Math.abs(r.equity || 0)]));
@@ -145,6 +149,7 @@ const fmtPeer = (k: string, v: any) => (v == null ? "—" : k === "market_cap" |
 
 /** Valuation measures side by side with up to 3 peers; lowest ratio highlighted as cheapest. */
 export function PeerComparison({ ticker }: { ticker: string }) {
+  useTheme();
   const [d, setD] = useState<any>(null);
   const [err, setErr] = useState(false);
   useEffect(() => {
@@ -180,7 +185,7 @@ export function PeerComparison({ ticker }: { ticker: string }) {
   );
 }
 
-const s = StyleSheet.create({
+const s = themedStyles((colors) => ({
   iq: { backgroundColor: colors.brandSecondary, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.brandPrimary, padding: spacing.lg, marginBottom: spacing.md },
   iqRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, marginTop: 4 },
   iqTag: { fontSize: 12, fontWeight: "800", borderWidth: 1, borderRadius: radius.pill, paddingHorizontal: spacing.sm, paddingVertical: 2, overflow: "hidden" },
@@ -225,10 +230,11 @@ const s = StyleSheet.create({
   td: { flex: 1, fontSize: 11, color: colors.onSurface, fontVariant: ["tabular-nums"], textAlign: "right" },
   tdHead: { fontSize: 10, color: colors.muted, fontWeight: "800" },
   note: { fontSize: 10, color: colors.muted, fontStyle: "italic", marginTop: spacing.sm, lineHeight: 14 },
-});
+}));
 
 /** OptiIQ Value: intrinsic value per share, with % vs current price. */
 export function OptiIQCard({ o }: { o: any }) {
+  useTheme();
   if (!o || !o.available) {
     return (
       <View testID="optiiq-unavailable" style={s.iq}>

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, Pressable, ScrollView } from "react-native";
+import { View, Text, Pressable, ScrollView } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import Icon from "@react-native-vector-icons/feather";
@@ -11,7 +11,7 @@ import { Input } from "@/src/Input";
 import { ToastHost, toast } from "@/src/Toast";
 import { Sparkline, Badge } from "@/src/parts";
 import { LoadingSkeleton } from "@/src/charts";
-import { colors, spacing, radius } from "@/src/theme";
+import { colors, spacing, radius, themedStyles, useTheme } from "@/src/theme";
 import { PlanGate, usePlan, LockedFeature } from "@/src/plans";
 import { AnnouncementBanner } from "@/src/Announcements";
 import { OptiScorePill } from "@/src/quality";
@@ -26,10 +26,12 @@ const PERIODS = ["day", "week", "month", "custom"];
 const REJECT_LABEL: Record<string, string> = { max_loss: "max loss", pop: "probability", roc: "return", liquidity: "liquidity", iv_rank: "IV rank", earnings: "earnings", undefined_risk: "undefined risk", account_type: "account type", options_level: "options level", capital: "capital needed" };
 
 export default function DiscoverGated() {
+  useTheme();
   return <PlanGate><Discover /></PlanGate>;
 }
 
 function Discover() {
+  useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useAuth();
@@ -245,6 +247,7 @@ function Discover() {
 }
 
 function ChipRow({ label, value, onChange, options, testKey }: { label: string; value: string; onChange: (v: string) => void; options: string[]; testKey: string }) {
+  useTheme();
   return (
     <View style={{ marginBottom: spacing.md }}>
       <Text style={styles.chipLabel}>{label}</Text>
@@ -266,6 +269,7 @@ function ChipRow({ label, value, onChange, options, testKey }: { label: string; 
 const short = (v: number) => (Math.abs(v) >= 1000 ? `${v < 0 ? "−" : ""}$${(Math.abs(v) / 1000).toFixed(1)}k` : money(v));
 
 function Mini({ label, value, tone }: { label: string; value: string; tone?: "success" | "error" }) {
+  useTheme();
   const color = tone === "success" ? colors.success : tone === "error" ? colors.error : colors.onSurface;
   return (
     <View style={styles.mini}>
@@ -275,7 +279,7 @@ function Mini({ label, value, tone }: { label: string; value: string; tone?: "su
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   header: { paddingHorizontal: spacing.lg, paddingBottom: spacing.sm, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.divider },
   headerTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   hello: { fontSize: 11, color: colors.muted, textTransform: "uppercase", letterSpacing: 1, fontWeight: "700" },
@@ -327,4 +331,4 @@ const styles = StyleSheet.create({
   planStrip: { backgroundColor: colors.surfaceSecondary, borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: 6, marginTop: spacing.sm },
   planText: { fontSize: 11, fontWeight: "700", color: colors.onSurface },
   rationale: { fontSize: 12, color: colors.onSurfaceSecondary, marginTop: spacing.sm, fontStyle: "italic", lineHeight: 17 },
-});
+}));
