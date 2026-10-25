@@ -199,3 +199,9 @@ Research-first, transparent, trust-driven AI intelligence platform. AI acts as a
 ## Update (Jun 2026) - Dark theme
 - src/theme.ts: dark palette (design_guidelines.json, but screens=surface #000 / cards=surfaceSecondary #1C1C1E), System/Light/Dark preference (AsyncStorage theme_preference), colors Proxy + themedStyles() + useTheme() subscription in every component. Profile > Appearance segmented control.
 - OptiIQ sanity guard (EPS > price or value > 10x price -> no value) to drop share-class / bad market-cap outliers (BRK.B, SKYD).
+
+## Update (Jun 2026) - Dark App Store screenshots from user's own iPhone captures
+- Script: /app/store-assets/screenshots/compose_dark.py (user_raw/IMG_6524-6534.webp -> headline + graphite iPhone frame, Robinhood-style dark template; phone status bar replaced with 9:41).
+- Output: screenshots/final_dark/iPhone_6.3in_1206x2622 (full phone visible), iPhone_Duo_inner_2007x2853 and iPad_13in_2064x2752 (bigger phone running off the bottom). 10 per size, RGB, captions.json.
+- Zip: /app/store-assets/TraduSI_AppStore_Screenshots_Dark.zip
+- Note: user's screens show the metric name "OptiIQ Value" (in-app label in src/financials.tsx / ValuationBoard.tsx).

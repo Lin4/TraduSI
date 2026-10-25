@@ -1,0 +1,62 @@
+[
+  {
+    "order": 1,
+    "screen": "IMG_6525",
+    "headline": "Find high-odds trades in seconds",
+    "subline": "TraduSI scans the market and scores every idea 0–100, with a ready-made plan."
+  },
+  {
+    "order": 2,
+    "screen": "IMG_6524",
+    "headline": "Trades that match your risk",
+    "subline": "Pick low, balanced or high risk. Every pick starts at 70%+ modeled odds of profit."
+  },
+  {
+    "order": 3,
+    "screen": "IMG_6526",
+    "headline": "Know your entry, target & stop",
+    "subline": "Every trade comes with a clear plan, sized to your account."
+  },
+  {
+    "order": 4,
+    "screen": "IMG_6527",
+    "headline": "See how a trade pays off",
+    "subline": "Payoff charts, breakevens and AI answers from live market data."
+  },
+  {
+    "order": 5,
+    "screen": "IMG_6528",
+    "headline": "Know what could go wrong",
+    "subline": "Profit and loss across price moves and time, before you trade."
+  },
+  {
+    "order": 6,
+    "screen": "IMG_6529",
+    "headline": "Live option chains, made simple",
+    "subline": "Real-time bids, asks, IV and open interest. Tap to build a trade."
+  },
+  {
+    "order": 7,
+    "screen": "IMG_6530",
+    "headline": "Build any options strategy",
+    "subline": "One-tap templates with max profit, max loss and odds of profit."
+  },
+  {
+    "order": 8,
+    "screen": "IMG_6531",
+    "headline": "Plan every day of the trade",
+    "subline": "See your profit or loss for every date and price move."
+  },
+  {
+    "order": 9,
+    "screen": "IMG_6533",
+    "headline": "Buy at the right price",
+    "subline": "Intrinsic value plus 4 support-based buy levels, with price alerts."
+  },
+  {
+    "order": 10,
+    "screen": "IMG_6534",
+    "headline": "Invest with the full picture",
+    "subline": "Quarterly revenue, earnings and cash flow from SEC filings."
+  }
+]
