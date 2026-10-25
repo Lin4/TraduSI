@@ -31,9 +31,6 @@ FEATURES: Dict[str, Dict[str, Any]] = {
     "expired": {"scans_per_day": 0, "alerts": 0, "smart_alerts": False, "custom_period": False, "collateral_views": False,
                 "ai_explain": False, "backtest": False, "day_lab": False, "voice": False, "daily_push": False, "strategy_tier": 0,
                 "ai_chat_per_day": 0, "ai_deep_per_day": 0},
-    "trial": {"scans_per_day": 5, "alerts": 3, "smart_alerts": False, "custom_period": False, "collateral_views": False,
-              "ai_explain": False, "backtest": False, "day_lab": False, "voice": False, "daily_push": False, "strategy_tier": 1,
-              "ai_chat_per_day": 0, "ai_deep_per_day": 0},
     "simple": {"scans_per_day": 10, "alerts": 3, "smart_alerts": False, "custom_period": False, "collateral_views": False,
                "ai_explain": False, "backtest": False, "day_lab": False, "voice": False, "daily_push": False, "strategy_tier": 1,
               "ai_chat_per_day": 0, "ai_deep_per_day": 0},
@@ -44,6 +41,7 @@ FEATURES: Dict[str, Dict[str, Any]] = {
                "ai_explain": True, "backtest": True, "day_lab": True, "voice": True, "daily_push": True, "strategy_tier": 4,
                "ai_chat_per_day": 100, "ai_deep_per_day": 25},
 }
+FEATURES["trial"] = dict(FEATURES["advance"])  # Free plan: everything in Advance for 7 days from sign-up, no card
 # strategy_tier: 1 = covered calls + CSPs, 3 = + all spreads/condors/long options, 4 = + naked selling
 
 

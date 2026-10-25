@@ -1,0 +1,42 @@
+{
+  "summary": "Tested the OptiIQ old-style display on Long-term Analyze (advance user, MSFT), the billing status for trial/expired, trial-user unlocks, the expired-user paywall/read-only flows, Upgrade and Profile. Backend: 7/8 pass. The one failure is a design gap: the server doesn't enforce the expired lock. Frontend: almost everything works. 2 bugs: (1) trial users see Discover's 'Low risk · Higher reward' (spreads & iron condor) profile LOCKED with an 'Advance plan' upsell; (2) expired users have no way in the UI to reach Profile (no sign-out or plan management) because the only Profile entry (Discover avatar) is behind the paywall. No deprecated Expo packages detected.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "POST /api/screener/* (scan), /api/alerts/add, /api/watchlist/add", "issue": "No server-side plan enforcement. An expired user (features all 0) gets 200 from stock-analysis, alerts/add and watchlist/add. Also server.py:547 trusts the client-sent req.tier ('tier = req.tier if req.tier in TIER_RANK'), so anyone can send tier='expert' to unlock naked strategies. scans_per_day is counted (bump_scan) but never blocked. The paywall exists only in the UI.", "priority": "HIGH"}
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Discover risk-profile picker (app/(tabs)/index.tsx:57)", "issue": "tierLocked.low_high = !plan.atLeast('advance') uses TIER_RANK (trial=1 < advance=3), so trial users see 'Low risk · Higher reward' locked and a 'Spreads & iron condor profiles · Advance plan · Upgrade' lock. This contradicts 'everything in Advance' and the 'Level 3 · + spreads & iron condors' banner. Fix: use plan.features.strategy_tier >= 3 (and >= 4 for high_high) instead of atLeast().", "testID": "locked-profiles", "priority": "HIGH"},
+      {"component": "Expired user navigation to Profile", "issue": "The only way into /profile is the Discover header avatar (testID go-profile, index.tsx:117). Discover is fully wrapped by PlanGate, so expired users can't reach Profile, can't sign out and can't manage their plan. /profile works only through a direct URL. Add a Profile/Sign-out link to the PlanGate paywall, or a profile avatar to the Portfolio/Alerts/Learn headers.", "testID": "paywall", "priority": "HIGH"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Profile (expired)", "issues": ["The plan card shows a bare '—' in the price slot next to TRIAL ENDED"]},
+      {"screen": "Alerts", "issues": ["The alert-usage text ('1 saved alert' / '0/20 alerts used') sits centered on its own line under the subtitle, out of line with the left-aligned header text"]},
+      {"screen": "Analyze Long-term buy levels", "issues": ["B-row secondary text is cut off ('-2.9% vs intri...') at 375px width", "OptiIQ Value ($527.55) and Probability-weighted value ($736.58) appear on the same screen with very different values, which may confuse users (this is by design, per the user's request)"]},
+      {"screen": "Portfolio", "issues": ["Watchlist remove button wl-remove-* is 28x28, below the 44pt minimum touch target"]}
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_iter31_trial_plans_optiiq.py", "/app/test_reports/pytest/iter31.xml"],
+  "action_items": [
+    "Fix app/(tabs)/index.tsx:57 so trial unlocks the low_high profile: use plan.features.strategy_tier >= 3 for low_high and >= 4 for high_high, not plan.atLeast().",
+    "Give expired users a path to Profile and sign-out: add a link on the PlanGate paywall (src/plans.tsx) or a profile avatar on the Portfolio/Alerts/Learn headers.",
+    "Backend: enforce compute_access on scan endpoints (block tier 'expired' with 402, enforce scans_per_day), /api/alerts/add (expired and alert count limit), /api/watchlist/add, and stop trusting req.tier from the client (server.py:547).",
+    "Minor: replace the '—' price on the expired Profile plan card; align the alert-usage text; don't truncate the B-row 'vs intrinsic' text; enlarge the wl-remove hit area (hitSlop)."
+  ],
+  "critical_code_review_comments": [
+    "The paywall is client-only. Nothing in server.py, strategies.py or extras.py reads features.scans_per_day, alerts or the expired tier. Clients can bypass it with direct API calls, and server.py:547 accepts the tier from the request body.",
+    "usePlan() falls back to tier 'trial' when user.access is missing (plans.tsx:47). If /me fails to send access, an expired user would get unlocked UI. Safer to default to 'expired' or wait for the data to load.",
+    "analyze.tsx is 669 lines, close to the 700-line split threshold."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter31_trial_plans_optiiq.py (new)"],
+  "success_rate": {"backend": "88% (7/8; the failing test is the missing server-side enforcement for expired users)", "frontend": "~90% (all requested flows pass except the trial profile lock and the missing Profile access for expired users)"},
+  "seed_data_creation": "None kept. A temporary TSLA alert on expired@optiscreen.app was created and removed (the UI remove flow was tested on it). The MSFT price_below 300 alert and the AAPL watchlist row are intact. A ZZZT watchlist entry was added and deleted through the API.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Verified OK: MSFT long shows optiiq-card ($527.55, '+0.6% vs price') with no calc table and no whatif-toggle; buy-levels B1-B4 with strength, reasons and Buy alert buttons; Intrinsic value · scenarios with scen-Bull/Base/Bear; Recalculate changes the probability-weighted value; Fundamentals shows buy/sell points. Billing: trial = tier 'trial', 7 days left, features == advance; expired = all zero. Trial user: Discover header 'Unlimited scans · Free trial · 7 days left', custom period available, smart alert kind available, chat unlocked (30 left today), backtest not locked (shows pending), Iron Condor strategy allowed, Upgrade has the Free CURRENT card plus $9/$29/$79 cards, Profile shows FREE TRIAL with 7 days left. Expired user: paywall on Discover/Analyze/Chain, See plans goes to /upgrade (upgrade-trial-ended, Free ENDED); Portfolio banner + AAPL row with no add input; ticker/AAPL paywall, Go back returns to /portfolio; Alerts banner, '1 saved alert', + goes to /upgrade, remove works; Learn and Profile (direct URL) open. Onboarding plan.tsx code-reviewed: free card is 'Free · 7-day trial' with FREE_CARD.features.",
+  "rca_of_issue": "Trial profile lock: index.tsx:57 uses plan.atLeast('advance') (rank-based, trial=1). Expired Profile access: the Discover avatar is the only push('/profile'), and PlanGate replaces the whole Discover screen."
+}

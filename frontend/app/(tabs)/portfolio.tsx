@@ -11,19 +11,16 @@ import { ToastHost, toast } from "@/src/Toast";
 import { Sparkline } from "@/src/parts";
 import { LoadingSkeleton } from "@/src/charts";
 import { colors, spacing, radius, themedStyles, useTheme } from "@/src/theme";
-import { PlanGate } from "@/src/plans";
+import { usePlan, TrialEndedBanner } from "@/src/plans";
 import { StrategiesList, ClosedHistory } from "@/src/StrategiesList";
 import { AskAIButton } from "@/src/ChatParts";
 
-export default function PortfolioGated() {
-  useTheme();
-  return <PlanGate><Portfolio /></PlanGate>;
-}
-
-function Portfolio() {
+/** After the trial ends this stays readable (saved strategies, history, watchlist); adding new items needs a plan. */
+export default function Portfolio() {
   useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { expired } = usePlan();
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -71,26 +68,29 @@ function Portfolio() {
         keyboardShouldPersistTaps="handled"
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={colors.brandPrimary} />}
       >
+        {expired ? <TrialEndedBanner text="Your saved strategies, trade history and watchlist stay here. Pick a plan to add new ones or run new screens." /> : null}
         <StrategiesList items={strats.items} total={strats.total_pnl} onChanged={load} />
-        {strats.items.length ? (
+        {strats.items.length && !expired ? (
           <AskAIButton testID="portfolio-ask-ai" label="Ask AI to review my open trades"
             prompt="Review my open trades: which look healthy, which need attention, and what should I watch this week?" />
         ) : null}
         <ClosedHistory items={strats.closed} archived={strats.archived} insights={strats.insights} total={strats.realized_total} onChanged={load} />
-        {!strats.items.length && !loading ? (
+        {!strats.items.length && !loading && !expired ? (
           <Pressable testID="strategies-empty" onPress={() => router.push("/(tabs)/chain" as any)} style={styles.stratEmpty}>
             <Icon name="layers" size={18} color={colors.brandPrimary} />
             <Text style={styles.stratEmptyText}>Build a strategy in the Chain tab and save it to track live P&L here.</Text>
           </Pressable>
         ) : null}
-        <View style={styles.addCard}>
-          <View style={{ flexDirection: "row", gap: spacing.sm, alignItems: "flex-end" }}>
-            <View style={{ flex: 1 }}>
-              <Input testID="watchlist-ticker" label="Add ticker" value={newTicker} onChangeText={(v) => setNewTicker(v.toUpperCase())} placeholder="e.g., AAPL" autoCapitalize="characters" />
+        {!expired ? (
+          <View style={styles.addCard}>
+            <View style={{ flexDirection: "row", gap: spacing.sm, alignItems: "flex-end" }}>
+              <View style={{ flex: 1 }}>
+                <Input testID="watchlist-ticker" label="Add ticker" value={newTicker} onChangeText={(v) => setNewTicker(v.toUpperCase())} placeholder="e.g., AAPL" autoCapitalize="characters" />
+              </View>
+              <Button testID="watchlist-add" label="Add" onPress={add} style={{ marginBottom: spacing.lg, paddingHorizontal: spacing.lg, minWidth: 80 }} />
             </View>
-            <Button testID="watchlist-add" label="Add" onPress={add} style={{ marginBottom: spacing.lg, paddingHorizontal: spacing.lg, minWidth: 80 }} />
           </View>
-        </View>
+        ) : null}
 
         {items.length > 0 && (
           <>
@@ -131,7 +131,7 @@ function Portfolio() {
                 <Text style={styles.rowPrice}>${q ? Number(q.price).toFixed(2) : "—"}</Text>
                 {q ? <Text style={[styles.rowChange, { color: up ? colors.success : colors.error }]}>{up ? "+" : ""}{Number(q.change_pct).toFixed(2)}%</Text> : null}
               </View>
-              <Pressable testID={`wl-remove-${it.ticker}`} onPress={() => remove(it.ticker)} style={styles.removeBtn}>
+              <Pressable testID={`wl-remove-${it.ticker}`} onPress={() => remove(it.ticker)} hitSlop={8} style={styles.removeBtn}>
                 <Icon name="x" size={14} color={colors.muted} />
               </Pressable>
             </Pressable>
@@ -141,7 +141,7 @@ function Portfolio() {
         {!loading && !items.length && (
           <View style={styles.empty}>
             <Icon name="briefcase" size={32} color={colors.muted} />
-            <Text style={styles.emptyText}>Your watchlist is empty. Add a ticker to track it live.</Text>
+            <Text style={styles.emptyText}>{expired ? "Your watchlist is empty." : "Your watchlist is empty. Add a ticker to track it live."}</Text>
           </View>
         )}
       </ScrollView>

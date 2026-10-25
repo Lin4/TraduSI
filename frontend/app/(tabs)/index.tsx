@@ -54,7 +54,8 @@ function Discover() {
   const plan = usePlan();
   const [scansToday, setScansToday] = useState(0);
   const scanLimit = plan.features.scans_per_day;
-  const tierLocked: Record<string, boolean> = { low_high: !plan.atLeast("advance"), high_high: !plan.atLeast("expert") };
+  // by features, not tier rank: the Free trial ranks below Advance but includes everything in it
+  const tierLocked: Record<string, boolean> = { low_high: plan.features.strategy_tier < 3, high_high: plan.features.strategy_tier < 4 };
 
   useEffect(() => {
     api("/api/screener/profiles").then((r) => {

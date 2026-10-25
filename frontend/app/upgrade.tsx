@@ -9,7 +9,7 @@ import { api } from "@/src/api";
 import { useAuth } from "@/src/auth";
 import { Button } from "@/src/Button";
 import { ToastHost, toast } from "@/src/Toast";
-import { PLAN_CARDS, usePlan, tierLabel } from "@/src/plans";
+import { PLAN_CARDS, FREE_CARD, usePlan, tierLabel } from "@/src/plans";
 import { useSubscription, rcEnabled, rcSimulated, PACKAGE_TIER } from "@/src/revenuecat";
 import { colors, spacing, radius, themedStyles, useTheme } from "@/src/theme";
 
@@ -95,6 +95,22 @@ export default function Upgrade() {
         </View>
       </View>
       <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 60 }]}>
+        {plan.expired ? (
+          <View testID="upgrade-trial-ended" style={styles.ended}>
+            <Icon name="clock" size={16} color={colors.brandPrimary} />
+            <Text style={styles.endedText}>Your 7-day free trial has ended. Pick a plan to run new screens again. Your saved portfolio and alerts are still there.</Text>
+          </View>
+        ) : null}
+        <View testID="upgrade-plan-free" style={styles.card}>
+          <View style={styles.cardTop}>
+            <Text style={styles.name}>{FREE_CARD.name}</Text>
+            {plan.tier === "trial" ? <Text style={styles.currentTag}>CURRENT</Text> : plan.expired ? <Text style={styles.endedTag}>ENDED</Text> : null}
+            <Text style={styles.price}>$0<Text style={styles.per}> · 7 days</Text></Text>
+          </View>
+          {FREE_CARD.features.map((f) => (
+            <View key={f} style={styles.feat}><Icon name="check" size={13} color={colors.brandPrimary} /><Text style={styles.featText}>{f}</Text></View>
+          ))}
+        </View>
         {PLAN_CARDS.map((p) => {
           const active = selected === p.id;
           const current = plan.tier === p.id;
@@ -158,6 +174,9 @@ const styles = themedStyles((colors) => ({
   cardTop: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginBottom: spacing.sm },
   name: { flex: 1, fontSize: 18, fontWeight: "800", color: colors.onSurface },
   currentTag: { fontSize: 10, fontWeight: "800", color: colors.brandPrimary, letterSpacing: 1 },
+  endedTag: { fontSize: 10, fontWeight: "800", color: colors.muted, letterSpacing: 1 },
+  ended: { flexDirection: "row", gap: spacing.sm, padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.brandSecondary, borderWidth: 1, borderColor: colors.brandPrimary, marginBottom: spacing.md },
+  endedText: { flex: 1, fontSize: 13, color: colors.onBrandSecondary, lineHeight: 19 },
   price: { fontSize: 20, fontWeight: "800", color: colors.onSurface, fontVariant: ["tabular-nums"] },
   per: { fontSize: 12, color: colors.muted, fontWeight: "600" },
   feat: { flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingVertical: 2 },

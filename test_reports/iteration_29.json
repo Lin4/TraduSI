@@ -1,0 +1,51 @@
+{
+  "summary": "Tested the new OptiIQ DCF (WACC/CAPM, 10-year FCF, terminal value, cash/debt bridge, beta check), the excess-return model for banks, and buy levels (reversals, MAs, Fibonacci, 52w low, OptiIQ Value) on the backend and in the Expo web UI at 390x844. Backend: 13/13 pytest pass for MSFT, AAPL, KO, V, MA, JPM and buy levels for 5 tickers. I also checked NVDA and EOG by hand. The math adds up: PV sum + PV terminal = operations, + cash - debt = equity, / shares = value, CoE = rf + beta*MRP, weights sum to 1, beta check values fall as beta rises. V and MA are fixed: V $349 vs $408 price, MA in line with price, on the DCF model. JPM uses the book-value model with correct math. Frontend: OptiIQ card, the calculation toggle (FCF table, value bridge, WACC, growth chips, beta tiles), JPM book-value calc, buy-level ranges and layers, strength badges and reasons all work. Buy alert shows a toast and switches to 'Alert on'; I deleted the alert afterwards. Dark mode is readable and the theme is reset to System. Two problems remain. (1) The AI thesis and BUY rating still use the old DCF weighted value, so they contradict the OptiIQ card. (2) The valuation board still has large outliers that don't match live Analyze. No deprecated Expo packages found.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "POST /api/screener/stock-analysis (long) - LLM thesis", "issue": "The prompt (server.py ~line 806) passes the old dcf_valuation weighted_value, not OptiIQ. MSFT thesis says 'The DCF weighted value of 736.58 is well above the current price ... margin of safety' and rates it BUY, while the OptiIQ card right below shows $520.53 (-0.8%). JPM is also rated BUY while OptiIQ shows -17.9%. The response field 'intrinsic_value' also still returns the old weighted value (736.58).", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "GET /api/valuation/board", "issue": "Gross outliers: 26 stocks with value > 4x price (MGM 28->270, LVS 35->327, FIS 37->327, EOG 163->1227, COP 151->954, MPC 457->2067, BKNG p=155.83 v=768) and 25 with premium > 400%, mostly utilities and capex-heavy names (DUK 527%, CMS 1238%, EVRG 2048%, PNW 2162%, KR 2693%, INTC 3648%, TSLA 885%). Live Analyze for EOG gives $249.96, so the board's $1227 is stale or wrong. NVDA board $260.59 vs live $188.87; V board $375.90 vs live $349.02. Re-check once the ~1h fundamentals refresh finishes. If utilities are still >400%, the negative-FCF-to-steady-state convergence over-penalises regulated capex names."},
+      {"endpoint": "optiiq_value (engine.py:1088-1093)", "issue": "cf_note says 'Free cash flow is below steady-state earnings (heavy investment)' even when they are almost equal (V: FCF 21.013B vs steady 21.061B; NVDA 127.0B vs 128.3B). Add a tolerance (e.g. within 5%)."},
+      {"endpoint": "optiiq_value years[].year", "issue": "years[].year is null when quarterly filings come back empty (rate-limited), e.g. on the first NVDA/EOG call. The UI falls back to Y1..Y10 and the value falls back to pfcf_ttm and debt-to-equity, so the same ticker can give slightly different values between calls."},
+      {"endpoint": "optiiq growth hint", "issue": "The UI hint 'Years 6-10: Half of years 1-5' is wrong when stage2 = long_term (EOG: stage1 5.69%, stage2 3.09% = long_term)."},
+      {"endpoint": "logging", "issue": "httpx INFO logs print full Finnhub URLs including token= (API key) in backend.err.log."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "BuyLevelsChart strength badge", "issue": "On a 390px width the 'MODERATE' badge wraps to 'MODERAT/E' when the '% vs intrinsic' text is long (MSFT B4). Add numberOfLines={1} or flexShrink:0 on the badge.", "testID": "buy-level-strength-B4", "priority": "low"},
+      {"component": "BuyLevelsChart labels", "issue": "When a buy level sits at the intrinsic value (KO B4 $72.74 vs OptiIQ $72.49), the 'Intrinsic $...' label and the 'B4 $72.74' label overlap on the right edge ('Intri' cut off).", "testID": "buy-levels-chart", "priority": "low"}
+    ],
+    "integration_issues": [
+      {"flow": "Long-term analysis", "issue": "The AI thesis and rating chip (BUY / MED CONF.) disagree with the OptiIQ value shown beneath them (see backend critical issue).", "affected_testIDs": ["optiiq-card"]}
+    ],
+    "design_issues": [
+      {"screen": "Analyze > Long-term > Buy levels", "issues": ["Buy alert buttons are 96x36px, below the 44px minimum touch height."]}
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_iter29_optiiq_dcf_buy_levels.py", "/app/backend/tests/dump_iter29.py", "/app/test_reports/pytest/pytest_iter29.xml"],
+  "action_items": [
+    "Feed OptiIQ value/upside (and buy levels) into the long-term LLM prompt instead of valuation['weighted_value'], and point the 'intrinsic_value' response field at OptiIQ, so the thesis and BUY/SELL rating match the OptiIQ card.",
+    "After the fundamentals refresh finishes, re-check the valuation board outliers (EOG, COP, MPC, MGM, LVS, FIS, BKNG, utilities DUK/CMS/EVRG/PNW, KR, INTC). Make sure board values match live Analyze (NVDA 260 vs 189, EOG 1227 vs 250).",
+    "Add a tolerance to the cf_note 'below steady-state' message.",
+    "Fix the 'Years 6-10' hint when stage2 is floored at the long-term rate.",
+    "Stop the strength badge from wrapping and avoid the Intrinsic/B-level label overlap in BuyLevelsChart.",
+    "Make the Buy alert buttons at least 44px high.",
+    "Mask the Finnhub token in httpx logs (set the httpx logger to WARNING)."
+  ],
+  "critical_code_review_comments": [
+    "engine.py optiiq_value: the WACC floor max(..., lt+0.035, 0.07) means the shown WACC can differ from the shown formula inputs without an explanation in the UI.",
+    "engine.py: the terminal value is discounted at t=10 while the yearly flows use mid-year (t-0.5). This is acceptable but inconsistent.",
+    "valuation_board.buy_plan: the 10% step fallback levels skip the 50%-of-price floor check and use a fixed 3% gap instead of max(3%, 2*tol).",
+    "server.py: the legacy dcf_valuation is still computed and drives the LLM prompt, intrinsic_value, buy_point and sell_point, so the two valuation models conflict."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter29_optiiq_dcf_buy_levels.py", "/app/backend/tests/dump_iter29.py"],
+  "success_rate": {"backend": "100% of 13 pytest; board outliers flagged", "frontend": "~95% (all flows work; minor layout issues)"},
+  "seed_data_creation": "One KO price_below alert (Buy level B1) was created through the UI and then deleted via DELETE /api/alerts/{id}. Theme reset to System.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Finnhub rate limits: DUK/EOG first returned optiiq.available=false 'Market data unavailable'; the retry after 60s worked. GET /api/alerts returns {items:[...]}. Board rows use keys t/n/s/p/v/d/b. Creating files under /app/backend triggers a uvicorn reload (WatchFiles). Use dump_iter29.py <TICKERS> to print the OptiIQ breakdown and buy levels.",
+  "rca_of_issue": "AI/OptiIQ mismatch: server.py long branch builds the LLM prompt with valuation['weighted_value'] from dcf_valuation (EPS x growth x terminal P/E), not optiiq['value']. Board outliers: likely board rows computed from stored fields before the refresh; live optiiq_value for EOG gives $249.96 vs board $1227."
+}

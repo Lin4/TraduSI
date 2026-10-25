@@ -1,0 +1,43 @@
+{
+  "summary": "Retest of iteration 29 (OptiIQ DCF and buy levels). Backend: 15/15 pytest pass (test_iter30_optiiq_retest.py) on 7 live tickers: MSFT, JPM, V, MA, DUK, CMS, INTC. The HIGH issue is fixed. intrinsic_value and intrinsic_line now equal optiiq.value with source 'OptiIQ Value', and both are null for low confidence (INTC $10.75 vs $86.96). The AI thesis quotes the OptiIQ Value and buy levels and no longer mentions 'weighted value'. Verdicts match: MSFT BUY at +0.6%, JPM HOLD at -17.9%, V HOLD, MA BUY at +28%. DCF details are present and correct: fcf_source, interest_addback, start_cf/steady_cf, stage2_floored, capped_by_revenue, wacc_floored/wacc_formula, and years[].year is always an int. The value bridge math is exact. cf_note no longer says 'well below' when start_cf == steady_cf (V, MA). DUK and CMS use excess_return ('Regulated utilities...'), JPM uses excess_return ('Banks...'), V and MA use dcf. Board: no bucketed stock is above +300% or below -75%, and the 63 far-from-price names are in unrated with the correct reason. Buy levels pass the regression checks: sorted, at least 3% apart, have strength and reasons, and step levels are at least 50% of price. No 'token=' lines in backend.err.log since the restart. Frontend (390x844): MSFT DCF table (2027e..), WACC/growth hints, DUK book-value calc, INTC low-confidence warning with no intrinsic line, strength badges on one line (16px tall), Buy alert buttons 96x44, and intrinsic and level labels don't overlap. The DUK B1 alert was created ('Alert on' + toast) and then deleted. Remaining problems: the old EPS-DCF section ('Probability-weighted value', buy/sell zones) is still shown under the OptiIQ card, and the fields and prompt use empty live metrics when Finnhub is rate-limited. No deprecated Expo packages detected.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/screener/stock-analysis (long), server.py:803-835", "issue": "When Finnhub metrics are rate-limited, only optiiq uses the stored board metrics (model_metrics). The response fields pe_ratio, eps_ttm, roe, beta, revenue_growth_pct, valuation_measures, the old 'valuation', and the LLM prompt still use the empty live `metrics`. On the first DUK call the thesis said 'Fundamental data is missing (P/E 0, EPS $0, ROE ... all empty)', and that answer is cached for 600s."},
+      {"endpoint": "optiiq_brief (server.py:718)", "issue": "The prompt always says 'growth X% then half', even when stage2_floored (INTC: '0.0% growth, then half', but years 6-10 = 3.0%). Use 'then {stage2}%'."},
+      {"endpoint": "optiiq_value excess_return for utilities (engine.py:1078-1092)", "issue": "Results are systematically low. With g=3% and CoE ≥9.3% the model implies about 1.1x book, while regulated utilities trade at 1.5-2.5x book. On the board 28 of 31 utilities show as overvalued (+47% to +155%), e.g. DUK +63%, CMS +75%, SO +77%. Also, independent power producers VST (+254%), CEG and NRG are labelled 'Regulated utilities' because of the GICS sector."},
+      {"endpoint": "Stored board financials fallback", "issue": "db.valuation_board financials rows have no end_date or label. When the fallback is used (e.g. MA), years start at now.year (2026e instead of 2027e) and cash/debt sources show 'SEC filing, latest'. MSFT debt comes from Q2 FY26 while cash comes from Q4 FY26 (the newest filings lack total_debt)."},
+      {"endpoint": "POST /api/auth/login", "issue": "One login timed out at 20s during the parallel analysis load. It passed on retry (flaky)."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Analyze > Long-term", "issue": "The old EPS-DCF ValuationEditor ('Intrinsic value · scenarios', 'Probability-weighted value', Buy/Sell zone) and the Fundamentals 'Buy point (below)/Sell point (above)' (r.buy_point/sell_point from old dcf_valuation) are still rendered below the OptiIQ card and buy levels. They show a second, different intrinsic value and buy point, which contradicts OptiIQ and B1-B4. Reference: app/(tabs)/analyze.tsx:525-529,558,560; src/financials.tsx:36-37", "affected_testIDs": ["dcf-recalc", "optiiq-card"]}
+    ],
+    "design_issues": [
+      {"screen": "Analyze > Long-term > Buy levels chart (DUK/CMS)", "issues": ["When B4 equals the intrinsic value far below the price (-39% to -43%), the y-axis stretches, so the price line and B1-B3 are squeezed into the top third of the chart."]}
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_iter30_optiiq_retest.py", "/app/test_reports/pytest/pytest_iter30.xml"],
+  "action_items": [
+    "Remove or relabel the old EPS-DCF ValuationEditor and the buy_point/sell_point rows (or point buy_point at B1), so Long-term shows a single intrinsic value (OptiIQ).",
+    "In the stock_analysis long branch, use model_metrics (stored fallback) for the response fundamentals fields and the LLM prompt when live metrics are empty.",
+    "In optiiq_brief, describe stage 2 as the actual rate when stage2_floored instead of 'then half'.",
+    "Optional: review the utilities excess-return calibration (allowed ROE, regulated P/B), and exclude IPPs (VST, CEG, NRG) from 'Regulated utilities'.",
+    "Optional: store end_date and label in valuation_board financials so year labels and cash/debt sources match the live path."
+  ],
+  "critical_code_review_comments": [
+    "engine.py optiiq_value: the debt row (db) and cash row (cb) can come from different quarters, so debt can be up to 2 quarters older than cash (MSFT).",
+    "BuyLevelsChart: the intrinsic label is moved 16px down when it collides with a level. That can collide with the next level label, but no overlap was seen on MSFT, DUK or INTC.",
+    "engine.py is 1172 lines and server.py is 1364 lines (>700). Consider splitting the OptiIQ code into its own module."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter30_optiiq_retest.py"],
+  "success_rate": {"backend": "100% (15/15)", "frontend": "100% of requested checks; 1 integration inconsistency (old DCF section)"},
+  "seed_data_creation": "None. The DUK B1 buy alert was created in the UI and deleted via DELETE /api/alerts/{id}.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Board GET /api/valuation/board returns {buckets:[{id,label,range,count}], stocks:[{t,n,s,p,v,d (premium%),b}], unrated:[{t,n,s,why}], progress}. The iter30 suite reuses check_buy from test_iter29. Tickers used: MSFT, JPM, V, MA, DUK, CMS, INTC. INTC is a good low-confidence example. The Finnhub rate limit is shared with the background refresh.",
+  "rca_of_issue": "Iter29 HIGH issue is fixed: server.py:801-806 sets intrinsic_value from OptiIQ, and optiiq_brief is injected into the prompt with a verdict rule."
+}

@@ -9,8 +9,14 @@ import { ToastHost, toast } from "@/src/Toast";
 import { MetricRow, Badge } from "@/src/parts";
 import { FreshnessPill, LoadingSkeleton } from "@/src/charts";
 import { colors, spacing, radius, themedStyles, useTheme } from "@/src/theme";
+import { PlanGate } from "@/src/plans";
 
-export default function TickerDetail() {
+export default function TickerDetailGated() {
+  useTheme();
+  return <PlanGate back><TickerDetail /></PlanGate>;
+}
+
+function TickerDetail() {
   useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();

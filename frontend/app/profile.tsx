@@ -9,13 +9,13 @@ import { api } from "@/src/api";
 import { Button } from "@/src/Button";
 import { ToastHost, toast } from "@/src/Toast";
 import { colors, spacing, radius, themedStyles, useTheme, useThemePreference, setThemePreference, type ThemePreference } from "@/src/theme";
-import { usePlan, tierLabel, PLAN_CARDS } from "@/src/plans";
+import { usePlan, tierLabel, PLAN_CARDS, FREE_CARD } from "@/src/plans";
 import { MetricRow } from "@/src/parts";
 import { LoadingSkeleton } from "@/src/charts";
 
 const PLANS = ["free", "simple", "advance", "expert"];
-const PRICE: Record<string, string> = { trial: "Free · 7 days", expired: "—", simple: "$9/mo", advance: "$29/mo", expert: "$79/mo" };
-const TRIAL_FEATURES = ["Everything in Simple", "5 scans a day", "7 days from sign-up"];
+const PRICE: Record<string, string> = { trial: "Free · 7 days", expired: "Free · ended", simple: "$9/mo", advance: "$29/mo", expert: "$79/mo" };
+const ENDED_FEATURES = ["Trial ended: new screens and analysis are locked", "Your saved portfolio and alerts stay visible", "Pick a plan to unlock everything again"];
 const Q_FIELDS: [string, string][] = [
   ["experience", "Experience"], ["risk_tolerance", "Risk tolerance"], ["capital", "Capital"],
   ["account_type", "Account type"], ["options_level", "Options level"],
@@ -32,7 +32,7 @@ export default function Profile() {
   const router = useRouter();
   const { user, refresh, signOut } = useAuth();
   const plan = usePlan();
-  const planFeatures = plan.tier === "trial" ? TRIAL_FEATURES : plan.tier === "expired" ? ["Trial ended — pick a plan to continue"] : (PLAN_CARDS.find((c) => c.id === plan.tier)?.features || []);
+  const planFeatures = plan.tier === "trial" ? FREE_CARD.features : plan.tier === "expired" ? ENDED_FEATURES : (PLAN_CARDS.find((c) => c.id === plan.tier)?.features || []);
   const [loading, setLoading] = useState(false);
   const [pushBusy, setPushBusy] = useState(false);
   const q = (user?.questionnaire || {}) as Record<string, any>;

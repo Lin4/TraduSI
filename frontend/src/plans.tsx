@@ -17,11 +17,12 @@ export type Features = {
   ai_chat_per_day: number; ai_deep_per_day: number;
 };
 const base = { smart_alerts: false, custom_period: false, collateral_views: false, ai_explain: false, backtest: false, day_lab: false, voice: false, daily_push: false, ai_chat_per_day: 0, ai_deep_per_day: 0 };
+const advance: Features = { scans_per_day: INF, alerts: 20, smart_alerts: true, custom_period: true, collateral_views: true, ai_explain: true, backtest: true, day_lab: false, voice: false, daily_push: false, strategy_tier: 3, ai_chat_per_day: 30, ai_deep_per_day: 5 };
 export const FEATURES: Record<Tier, Features> = {
   expired: { ...base, scans_per_day: 0, alerts: 0, strategy_tier: 0 },
-  trial: { ...base, scans_per_day: 5, alerts: 3, strategy_tier: 1 },
+  trial: advance, // Free plan: everything in Advance for 7 days
   simple: { ...base, scans_per_day: 10, alerts: 3, strategy_tier: 1 },
-  advance: { scans_per_day: INF, alerts: 20, smart_alerts: true, custom_period: true, collateral_views: true, ai_explain: true, backtest: true, day_lab: false, voice: false, daily_push: false, strategy_tier: 3, ai_chat_per_day: 30, ai_deep_per_day: 5 },
+  advance,
   expert: { scans_per_day: INF, alerts: INF, smart_alerts: true, custom_period: true, collateral_views: true, ai_explain: true, backtest: true, day_lab: true, voice: true, daily_push: true, strategy_tier: 4, ai_chat_per_day: 100, ai_deep_per_day: 25 },
 };
 
@@ -30,6 +31,12 @@ export const PLAN_CARDS = [
   { id: "advance", name: "Advance", price: 29, features: ["Unlimited scans", "All spreads & iron condors", "Custom periods", "Collateral & margin views", "70%+ smart alerts · 20 alerts", "AI explanations & backtest", "Ask AI chat · 30 questions/day (5 deep)"] },
   { id: "expert", name: "Expert", price: 79, features: ["Everything in Advance", "Naked Sell Put, Sell Call, Short Strangle", "Day-trade lab", "Voice (listen & speak)", "Daily-pick push · unlimited alerts", "Ask AI · 100 questions/day (25 deep with Claude Opus)"] },
 ];
+
+/** Free plan: starts at sign-up, no card. After 7 days new screens lock; saved items stay visible. */
+export const FREE_CARD = {
+  id: "free", name: "Free", price: 0,
+  features: ["Everything in Advance for 7 days", "Starts at sign-up · no card needed", "Then pick Simple, Advance or Expert", "After 7 days your saved portfolio & alerts stay visible"],
+};
 
 export const tierLabel = (t: Tier) => (t === "trial" ? "Free trial" : t === "expired" ? "Trial ended" : t.charAt(0).toUpperCase() + t.slice(1));
 
@@ -66,8 +73,8 @@ export function LockedFeature({ need, label, testID }: { need: "simple" | "advan
   );
 }
 
-/** Full paywall when the 7-day trial has ended and no plan is active. */
-export function PlanGate({ children }: { children: React.ReactNode }) {
+/** Full paywall for new screens and analysis when the 7-day trial has ended and no plan is active. */
+export function PlanGate({ children, back }: { children: React.ReactNode; back?: boolean }) {
   useTheme();
   const { expired } = usePlan();
   const router = useRouter();
@@ -76,11 +83,36 @@ export function PlanGate({ children }: { children: React.ReactNode }) {
     <View testID="paywall" style={s.wall}>
       <View style={s.wallIcon}><Icon name="clock" size={28} color={colors.brandPrimary} /></View>
       <Text style={s.wallTitle}>Your 7-day free trial has ended</Text>
-      <Text style={s.wallSub}>Pick a plan to keep screening options. Learn and Profile stay open.</Text>
+      <Text style={s.wallSub}>Pick a plan to run new screens and analysis. Your saved portfolio and alerts stay visible, and Learn and Profile stay open.</Text>
       <Pressable testID="paywall-upgrade" onPress={() => router.push("/upgrade" as any)} style={s.wallBtn}>
         <Text style={s.wallBtnText}>See plans</Text>
       </Pressable>
+      {back ? (
+        <Pressable testID="paywall-back" onPress={() => (router.canGoBack() ? router.back() : router.replace("/(tabs)/portfolio" as any))} style={s.wallLink}>
+          <Text style={s.lockCta}>Go back</Text>
+        </Pressable>
+      ) : (
+        <Pressable testID="paywall-profile" onPress={() => router.push("/profile" as any)} style={s.wallLink}>
+          <Text style={s.lockCta}>Profile & sign out</Text>
+        </Pressable>
+      )}
     </View>
+  );
+}
+
+/** Banner on Portfolio and Alerts after the trial ends: saved items stay visible, adding new ones needs a plan. */
+export function TrialEndedBanner({ text }: { text: string }) {
+  useTheme();
+  const router = useRouter();
+  return (
+    <Pressable testID="trial-ended-banner" onPress={() => router.push("/upgrade" as any)} style={s.banner}>
+      <Icon name="clock" size={18} color={colors.brandPrimary} />
+      <View style={{ flex: 1 }}>
+        <Text style={s.bannerTitle}>Your free trial has ended</Text>
+        <Text style={s.bannerSub}>{text}</Text>
+      </View>
+      <Text style={s.lockCta}>See plans</Text>
+    </Pressable>
   );
 }
 
@@ -94,4 +126,8 @@ const s = themedStyles((colors) => ({
   wallSub: { fontSize: 14, color: colors.onSurfaceSecondary, textAlign: "center", lineHeight: 20 },
   wallBtn: { minHeight: 48, paddingHorizontal: spacing.xl, borderRadius: radius.pill, backgroundColor: colors.brandPrimary, alignItems: "center", justifyContent: "center" },
   wallBtnText: { color: colors.onBrandPrimary, fontWeight: "800", fontSize: 15 },
+  wallLink: { minHeight: 44, paddingHorizontal: spacing.lg, alignItems: "center", justifyContent: "center" },
+  banner: { flexDirection: "row", alignItems: "center", gap: spacing.md, padding: spacing.md, minHeight: 56, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.brandPrimary, backgroundColor: colors.brandSecondary, marginBottom: spacing.lg },
+  bannerTitle: { fontSize: 14, fontWeight: "800", color: colors.onBrandSecondary },
+  bannerSub: { fontSize: 12, color: colors.onSurfaceSecondary, marginTop: 2, lineHeight: 17 },
 }));

@@ -40,7 +40,7 @@ import chain
 import strategies
 import broadcasts
 import valuation_board
-from valuation_board import fill_balance_gaps, optiiq_sector, buy_levels
+from valuation_board import fill_balance_gaps, optiiq_sector, buy_plan
 from engine import (
     STRATEGIES, STRATEGY_META, PROFILES, ACCOUNT_TYPES, EXP_DAYS, MIN_POP_FLOOR, CREDIT_VARIANTS, LEVEL_NAMES, user_options_level,
     volatility_profile, build_idea, default_filters, passes, candidate_strategies, compact,
@@ -65,6 +65,7 @@ api_router = APIRouter(prefix="/api")
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("optiscreen")
+logging.getLogger("httpx").setLevel(logging.WARNING)  # request URLs carry API keys
 
 
 # ========== MODELS ==========
@@ -706,6 +707,21 @@ async def ticker_options(req: TickerOptionsReq, authorization: Optional[str] = H
     return {"result": chosen}
 
 
+def optiiq_brief(o: Dict[str, Any], bp: Dict[str, Any]) -> str:
+    """OptiIQ Value + buy levels as plain numbers for the long-term AI thesis (so it matches the card)."""
+    if not o.get("available"):
+        head = f"OptiIQ Value (intrinsic value) not available: {o.get('reason')}."
+    else:
+        head = f"OptiIQ Value (intrinsic value) ${o['value']} = {o['upside_pct']:+}% vs price"
+        if o.get("model") == "dcf":
+            d, g = o.get("discount") or {}, o.get("growth") or {}
+            head += (f" (10y FCF DCF, WACC {d.get('wacc', 0) * 100:.1f}%, growth {g.get('stage1', 0) * 100:.1f}% for years 1-5 "
+                     f"then {g.get('stage2', 0) * 100:.1f}%, terminal {g.get('long_term', 0) * 100:.1f}%)")
+        head += ", low confidence." if o.get("confidence") == "low" else "."
+    lv = "; ".join(f"{l['label']} ${l['price']} ({l['below_price_pct']}%, {l.get('strength', '')})" for l in bp.get("levels") or [])
+    return f"{head} Buy levels: {lv or 'none'}. {bp.get('summary') or ''}"
+
+
 @api_router.post("/screener/stock-analysis")
 async def stock_analysis(req: StockAnalysisReq, authorization: Optional[str] = Header(default=None)):
     user = await get_user_from_token(authorization)
@@ -758,6 +774,9 @@ async def stock_analysis(req: StockAnalysisReq, authorization: Optional[str] = H
         )
     else:
         metrics = bundle.get("metrics") or {}
+        stored = await db.valuation_board.find_one({"_id": tk}, {"metrics": 1, "financials": 1}) or {}
+        if not metrics.get("market_cap") and stored.get("metrics"):  # provider rate-limited: last stored copy from the valuation board
+            metrics = stored["metrics"]
         earnings = bundle.get("earnings") or {}
         pt = bundle.get("price_target")
         eps = metrics.get("eps_ttm") or 0
@@ -774,13 +793,17 @@ async def stock_analysis(req: StockAnalysisReq, authorization: Optional[str] = H
         fill_balance_gaps(financials, metrics, price)
         dcf_in = default_dcf_inputs(metrics)
         valuation = dcf_valuation(price, eps, dcf_in["growth"], dcf_in["discount_pct"], dcf_in["terminal_pe"], dcf_in["weights"])
-        optiiq = optiiq_value(price, metrics, financials, optiiq_sector(tk, bundle.get("sector") or UNIVERSE_INDEX.get(tk, {}).get("sector")))
-        iv_line = (optiiq["value"], "OptiIQ Value") if optiiq.get("available") else \
-            ((valuation["weighted_value"], "Probability-weighted DCF") if valuation and valuation.get("weighted_value") else (None, None))
+        model_fins = financials
+        if not financials and stored.get("financials"):
+            model_fins = [dict(r) for r in stored["financials"]]
+            fill_balance_gaps(model_fins, metrics, price)
+        optiiq = optiiq_value(price, metrics, model_fins, optiiq_sector(tk, bundle.get("sector") or UNIVERSE_INDEX.get(tk, {}).get("sector")), tk)
+        iv_line = (optiiq["value"], "OptiIQ Value") if optiiq.get("available") and optiiq.get("confidence") != "low" else (None, None)
+        bp = buy_plan(history, price, iv_line[0])
         resp = {
             "ticker": tk, "name": bundle["name"], "price": price, "purpose": "long", "candles": candles,
             "valuation": valuation, "valuation_inputs": dcf_in,
-            "intrinsic_value": valuation["weighted_value"] if valuation else None,
+            "intrinsic_value": iv_line[0],
             "price_target": pt, "stock_trend": bundle["trend"],
             "earnings_date": earnings.get("date"), "earnings_eps_estimate": earnings.get("eps_estimate"),
             "pe_ratio": pe, "eps_ttm": eps, "roe": metrics.get("roe_ttm"),
@@ -796,7 +819,7 @@ async def stock_analysis(req: StockAnalysisReq, authorization: Optional[str] = H
             "financials": financials,
             "optiiq": optiiq,
             "intrinsic_line": {"value": iv_line[0], "source": iv_line[1]},
-            "buy_levels": buy_levels(history, price, iv_line[0]),
+            "buy_levels": bp["levels"], "buy_overlay": bp["overlay"], "buy_summary": bp["summary"],
             "price_history": [[c.get("t"), round(c["c"], 2)] for c in history],
             "financials_source": "SEC 10-Q/10-K filings via Finnhub (quarterly values derived from year-to-date figures)",
             "buy_point": valuation["buy_zone_below"] if valuation else None,
@@ -806,7 +829,8 @@ async def stock_analysis(req: StockAnalysisReq, authorization: Optional[str] = H
         prompt = (
             f"Give a long-term thesis for {tk}. Data: price ${price}, P/E {pe}, EPS ${eps}, ROE {metrics.get('roe_ttm')}%, "
             f"revenue growth {metrics.get('revenue_growth_ttm')}%, analyst target ${pt}, peers {bundle['peers'][:3]}, "
-            f"ratings {bundle['analyst_ratings']}, DCF weighted value {valuation['weighted_value'] if valuation else 'n/a'}. "
+            f"ratings {bundle['analyst_ratings']}. {optiiq_brief(optiiq, bp)} "
+            "Base the verdict on the OptiIQ Value and buy levels (BUY only if price is near or below value or at a strong buy level). "
             f'JSON: {{"summary":"...","verdict":"BUY|SELL|HOLD","confidence":"low|med|high","moat_note":"..."}}'
         )
 

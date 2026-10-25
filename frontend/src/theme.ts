@@ -52,6 +52,9 @@ const light = {
   valueVeryOver: "#B91C1C",
   valueVeryOverBg: "#FEE2E2",
   chartValue: "#2563EB",
+  chartMa50: "#D97706",
+  chartMa200: "#7C3AED",
+  chartFib: "#94A3B8",
 
   // status pill / scenario cell / modal scrim backgrounds
   warnBg: "#FEF3C7",
@@ -110,6 +113,9 @@ const dark: ThemeColors = {
   valueVeryOver: "#F87171",
   valueVeryOverBg: "#450A0A",
   chartValue: "#94A3B8",
+  chartMa50: "#FBBF24",
+  chartMa200: "#A78BFA",
+  chartFib: "#64748B",
 
   warnBg: "#451A03",
   onWarnBg: "#FBBF24",

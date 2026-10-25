@@ -10,7 +10,7 @@ import { Button } from "@/src/Button";
 import { ToastHost, toast } from "@/src/Toast";
 import { Badge } from "@/src/parts";
 import { colors, spacing, radius, themedStyles, useTheme } from "@/src/theme";
-import { PlanGate, usePlan } from "@/src/plans";
+import { usePlan, TrialEndedBanner } from "@/src/plans";
 
 const KINDS = [
   { id: "price_above", label: "Price above", icon: "trending-up" },
@@ -20,12 +20,8 @@ const KINDS = [
 ];
 const PROFILE_OPTS = [{ id: "low_low", label: "Low risk" }, { id: "low_high", label: "Higher reward" }, { id: "high_high", label: "High risk" }];
 
-export default function AlertsGated() {
-  useTheme();
-  return <PlanGate><Alerts /></PlanGate>;
-}
-
-function Alerts() {
+/** After the trial ends saved alerts and the alert history stay visible; creating new alerts needs a plan. */
+export default function Alerts() {
   useTheme();
   const insets = useSafeAreaInsets();
   const [items, setItems] = useState<any[]>([]);
@@ -90,20 +86,21 @@ function Alerts() {
           <View>
             <Text style={styles.title}>Alerts</Text>
             <Text style={styles.sub}>New 70%+ setups, price moves & earnings</Text>
-            <Text testID="alert-usage" style={styles.emptySub}>{alertLimit >= 100000 ? "Unlimited alerts" : `${items.length}/${alertLimit} alerts used`}</Text>
+            <Text testID="alert-usage" style={[styles.emptySub, { textAlign: "left", marginTop: 2 }]}>{plan.expired ? `${items.length} saved alert${items.length === 1 ? "" : "s"}` : alertLimit >= 100000 ? "Unlimited alerts" : `${items.length}/${alertLimit} alerts used`}</Text>
           </View>
-          <Pressable testID="add-alert" onPress={() => setOpen(true)} style={styles.addBtn}>
+          <Pressable testID="add-alert" onPress={() => (plan.expired ? router.push("/upgrade" as any) : setOpen(true))} style={styles.addBtn}>
             <Icon name="plus" size={18} color={colors.onBrandPrimary} />
           </Pressable>
         </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll}>
+        {plan.expired ? <TrialEndedBanner text="Your saved alerts and alert history stay here. Pick a plan to create new alerts or run new screens." /> : null}
         {hasSmart || feed.length ? (
           <View testID="smart-feed" style={{ marginBottom: spacing.lg }}>
             <View style={styles.feedHead}>
               <Text style={styles.feedTitle}>Recent alerts</Text>
-              {hasSmart ? <Pressable testID="smart-check-now" onPress={checkNow} disabled={checking} style={styles.checkBtn}>
+              {hasSmart && !plan.expired ? <Pressable testID="smart-check-now" onPress={checkNow} disabled={checking} style={styles.checkBtn}>
                 <Icon name="refresh-cw" size={13} color={colors.brandPrimary} />
                 <Text style={styles.checkText}>{checking ? "Checking…" : "Check now"}</Text>
               </Pressable> : null}
@@ -148,8 +145,8 @@ function Alerts() {
         {!items.length && (
           <View style={styles.empty}>
             <Icon name="bell-off" size={32} color={colors.muted} />
-            <Text style={styles.emptyText}>No alerts yet. Create one to get notified on price moves or earnings dates.</Text>
-            <Text style={styles.emptySub}>Alerts fire via push notification on signed native builds.</Text>
+            <Text style={styles.emptyText}>{plan.expired ? "No saved alerts." : "No alerts yet. Create one to get notified on price moves or earnings dates."}</Text>
+            {!plan.expired ? <Text style={styles.emptySub}>Alerts fire via push notification on signed native builds.</Text> : null}
           </View>
         )}
       </ScrollView>

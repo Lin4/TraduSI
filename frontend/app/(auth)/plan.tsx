@@ -8,11 +8,11 @@ import { api } from "@/src/api";
 import { Button } from "@/src/Button";
 import { ToastHost, toast } from "@/src/Toast";
 import { colors, spacing, radius, themedStyles, useTheme } from "@/src/theme";
-import { PLAN_CARDS } from "@/src/plans";
+import { PLAN_CARDS, FREE_CARD } from "@/src/plans";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const PLANS = [
-  { id: "free", name: "7-day free trial", price: "$0", tagline: "Starts today", features: ["Everything in Simple", "5 scans a day", "No card needed"] },
+  { id: "free", name: "Free · 7-day trial", price: "$0", tagline: "Starts today", features: FREE_CARD.features },
   ...PLAN_CARDS.map((p) => ({ id: p.id, name: p.name, price: `$${p.price}/mo`, tagline: "Monthly · auto-renews", features: p.features })),
 ];
 
@@ -39,7 +39,7 @@ export default function PlanScreen() {
       <ScrollView contentContainerStyle={styles.scroll}>
         <Text style={styles.step}>Step 1 of 3</Text>
         <Text style={styles.title}>Pick your plan</Text>
-        <Text style={styles.subtitle}>Every account starts with a 7-day free trial. Paid plans are billed monthly after setup.</Text>
+        <Text style={styles.subtitle}>Every account starts on Free: everything in Advance for 7 days, no card needed. Paid plans are billed monthly after setup.</Text>
 
         <View style={{ marginTop: spacing.xl, gap: spacing.md }}>
           {PLANS.map((p) => {

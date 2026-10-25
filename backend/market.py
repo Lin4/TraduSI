@@ -288,6 +288,10 @@ async def get_metrics(client: httpx.AsyncClient, ticker: str) -> Dict[str, Any]:
         "debt_to_equity_q": m.get("totalDebt/totalEquityQuarterly"),
         "revenue_growth_5y": m.get("revenueGrowth5Y"),
         "eps_growth_5y": m.get("epsGrowth5Y"),
+        "revenue_growth_3y": m.get("revenueGrowth3Y"),
+        "pfcf_ttm": m.get("pfcfShareTTM"),  # price / free cash flow per share (TTM)
+        "pcf_ttm": m.get("pcfShareTTM"),    # price / operating cash flow per share (TTM)
+        "eps_growth_3y": m.get("epsGrowth3Y"),
         "eps_growth_ttm": m.get("epsGrowthTTMYoy"),
     }
     _cache_set(key, result)
@@ -301,14 +305,19 @@ _FIN_CONCEPTS = {
     "net_income": ["us-gaap_NetIncomeLoss", "us-gaap_ProfitLoss"],
     "operating_cash_flow": ["us-gaap_NetCashProvidedByUsedInOperatingActivities",
                             "us-gaap_NetCashProvidedByUsedInOperatingActivitiesContinuingOperations"],
-    "capex": ["us-gaap_PaymentsToAcquirePropertyPlantAndEquipment", "us-gaap_PaymentsToAcquireProductiveAssets"],
+    "capex": ["us-gaap_PaymentsToAcquirePropertyPlantAndEquipment", "us-gaap_PaymentsToAcquireProductiveAssets",
+              "us-gaap_PaymentsToAcquireOilAndGasPropertyAndEquipment", "us-gaap_PaymentsToAcquireOilAndGasProperty",
+              "us-gaap_PaymentsToExploreAndDevelopOilAndGasProperties"],
     "cash": ["us-gaap_CashAndCashEquivalentsAtCarryingValue",
              "us-gaap_CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents"],
+    "cash_st": ["us-gaap_CashCashEquivalentsAndShortTermInvestments"],
+    "st_investments": ["us-gaap_ShortTermInvestments", "us-gaap_MarketableSecuritiesCurrent", "us-gaap_OtherShortTermInvestments",
+                       "us-gaap_AvailableForSaleSecuritiesDebtSecuritiesCurrent"],
     "total_liabilities": ["us-gaap_Liabilities"],
     "equity": ["us-gaap_StockholdersEquity",
                "us-gaap_StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest"],
     "debt_long": ["us-gaap_LongTermDebtNoncurrent", "us-gaap_LongTermDebt", "us-gaap_LongTermDebtAndCapitalLeaseObligations"],
-    "debt_current": ["us-gaap_LongTermDebtCurrent", "us-gaap_DebtCurrent"],
+    "debt_current": ["us-gaap_LongTermDebtCurrent", "us-gaap_DebtCurrent", "us-gaap_LongTermDebtAndCapitalLeaseObligationsCurrent"],
     "debt_short": ["us-gaap_CommercialPaper", "us-gaap_ShortTermBorrowings"],
 }
 _FLOW_KEYS = ("revenue", "net_income", "operating_cash_flow", "capex")
@@ -361,6 +370,9 @@ async def get_quarterly_financials(client: httpx.AsyncClient, ticker: str, n: in
             row[k] = (a - b) if a is not None and b is not None else None
         for k in ("cash", "total_liabilities", "equity"):
             row[k] = cur["ytd"].get(k)
+        cash_st, st_inv = cur["ytd"].get("cash_st"), cur["ytd"].get("st_investments")
+        row["cash_and_investments"] = cash_st if cash_st is not None else \
+            (row["cash"] + (st_inv or 0.0) if row["cash"] is not None else None)
         parts = [cur["ytd"].get(k) for k in ("debt_long", "debt_current", "debt_short")]
         row["total_debt"] = sum(p for p in parts if p is not None) if any(p is not None for p in parts) else None
         row["debt_to_equity"] = round(row["total_debt"] / row["equity"], 2) if row["total_debt"] is not None and row["equity"] else None

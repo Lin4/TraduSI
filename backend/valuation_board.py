@@ -1,4 +1,4 @@
-"""S&P 500 valuation board, intrinsic-value buy levels and the price-alert checker.
+"""S&P 500 valuation board, buy levels (support confluence) and the price-alert checker.
 
 Board: every S&P 500 constituent's price vs its OptiIQ Value -- the same model as Analyze -> Long-term
 (engine.optiiq_value on the same Finnhub metrics + SEC quarterly financials) -- bucketed by discount/premium.
@@ -73,9 +73,10 @@ def evaluate(doc: Dict[str, Any], price: float) -> Dict[str, Any]:
     rows = [dict(r) for r in doc.get("financials") or []]
     metrics = doc.get("metrics") or {}
     fill_balance_gaps(rows, metrics, price)
-    o = optiiq_value(price, metrics, rows, doc.get("sector") or "")
-    if not o.get("available"):
-        return {"price": round(price, 2), "value": None, "premium": None, "bucket": None, "reason": o.get("reason")}
+    o = optiiq_value(price, metrics, rows, doc.get("sector") or "", doc.get("ticker") or doc.get("_id") or "")
+    if not o.get("available") or o.get("confidence") == "low":
+        why = o.get("reason") or "Value is far from the price (unusual inputs), so it isn't grouped"
+        return {"price": round(price, 2), "value": None, "premium": None, "bucket": None, "reason": why}
     prem = round((price / o["value"] - 1) * 100, 1)
     return {"price": round(price, 2), "value": o["value"], "premium": prem, "bucket": bucket_of(prem), "reason": None}
 
@@ -86,67 +87,199 @@ def _date(t: Optional[float]) -> Optional[str]:
     return datetime.fromtimestamp(t / 1000 if t > 1e11 else t, tz=timezone.utc).strftime("%Y-%m-%d")
 
 
-def buy_levels(candles: List[Dict[str, float]], price: float, intrinsic: Optional[float], count: int = 4) -> List[Dict[str, Any]]:
-    """Up to `count` buy levels below min(price, intrinsic value), highest first.
-    History: swing lows (lowest low of +/-5 days) that bounced >=3% within 15 days, clustered within ~1 ATR;
-    a cluster needs 2+ bounces. Strongest first (bounces + recency), at least 3% apart.
-    Any gap is filled with 10% steps below that ceiling."""
-    ceiling = min(price, intrinsic) if intrinsic else price
-    cap = ceiling * 0.99
+FIB_RATIOS = ((0.236, 0.5), (0.382, 0.9), (0.5, 0.9), (0.618, 1.2), (0.786, 0.8))  # (retracement, weight)
+MA_SET = ((50, 0.7), (100, 0.9), (200, 1.3))  # (days, weight)
+
+
+def _sma(vals: List[float], n: int) -> List[Optional[float]]:
+    out: List[Optional[float]] = [None] * len(vals)
+    s = 0.0
+    for i, v in enumerate(vals):
+        s += v
+        if i >= n:
+            s -= vals[i - n]
+        if i >= n - 1:
+            out[i] = s / n
+    return out
+
+
+def _pivots(candles: List[Dict[str, float]], move: float, k: int = 5, horizon: int = 20) -> List[Dict[str, Any]]:
+    """Reversal points: a swing low (lowest low of +/-k days) followed by a rally of `move`, or a swing high
+    (highest high of +/-k days) followed by a drop of `move`, within `horizon` days."""
+    out = []
+    for i in range(k, len(candles) - 1):
+        win, fwd, c = candles[i - k: i + k + 1], candles[i + 1: i + 1 + horizon], candles[i]
+        if c["l"] == min(x["l"] for x in win) and max(x["c"] for x in fwd) >= c["l"] * (1 + move):
+            out.append({"price": c["l"], "i": i, "kind": "low"})
+        elif c["h"] == max(x["h"] for x in win) and min(x["c"] for x in fwd) <= c["h"] * (1 - move):
+            out.append({"price": c["h"], "i": i, "kind": "high"})
+    return out
+
+
+def _ma_holds(candles: List[Dict[str, float]], sma: List[Optional[float]], horizon: int = 15) -> int:
+    """Times price came down to the average from above, held it (close within 1.5%) and then rallied 4%+."""
+    count, last = 0, -99
+    for i in range(1, len(candles) - horizon):
+        m, c = sma[i], candles[i]
+        if m is None or sma[i - 1] is None or i - last < 10 or candles[i - 1]["c"] <= sma[i - 1]:
+            continue
+        if c["l"] <= m * 1.01 and c["c"] >= m * 0.985 and max(x["c"] for x in candles[i + 1: i + 1 + horizon]) >= c["c"] * 1.04:
+            count, last = count + 1, i
+    return count
+
+
+def _fib_swing(candles: List[Dict[str, float]]) -> Optional[tuple]:
+    """Main swing for Fibonacci retracements: the 2-year high and the lowest low before it (up-move);
+    if the high came first, the rebound from the low after it."""
     n = len(candles)
-    chosen: List[Dict[str, Any]] = []
-    if n >= 40:
-        lows = [c["l"] for c in candles]
+    ih = max(range(n), key=lambda i: candles[i]["h"])
+    il = min(range(ih + 1), key=lambda i: candles[i]["l"])
+    if ih - il >= 20 and candles[ih]["h"] >= candles[il]["l"] * 1.15:
+        return il, ih
+    il = min(range(n), key=lambda i: candles[i]["l"])
+    ih = max(range(il, n), key=lambda i: candles[i]["h"])
+    if ih - il >= 10 and candles[ih]["h"] >= candles[il]["l"] * 1.15:
+        return il, ih
+    return None
+
+
+def _money(v: float) -> str:
+    return f"${v:,.2f}"
+
+
+def buy_plan(candles: List[Dict[str, float]], price: float, intrinsic: Optional[float], count: int = 4) -> Dict[str, Any]:
+    """Up to `count` buy levels below the price, each a zone where several signals agree:
+    reversal points (swing lows/highs that turned price), the 50/100/200-day averages (and how often they held),
+    Fibonacci retracements of the main 2-year swing, the 52-week low and the OptiIQ Value.
+    Zones are scored by signal weight + agreement between different signal types; the best `count`
+    (at least 3% or two daily ranges apart) are shown highest first. Short histories fall back to 10% steps."""
+    n = len(candles)
+    cap, floor = price * 0.99, price * 0.5
+    cands: List[Dict[str, Any]] = []
+    overlay: Optional[Dict[str, Any]] = None
+    smas: Dict[int, List[Optional[float]]] = {}
+    tol = 0.015
+    if n >= 60:
         closes = [c["c"] for c in candles]
         atr = sum(c["h"] - c["l"] for c in candles[-50:]) / min(50, n) / price
-        tol = min(max(atr, 0.012), 0.04)
-        pivots = []
-        for i in range(5, n - 2):
-            if lows[i] == min(lows[i - 5: i + 6]):
-                fwd = closes[i + 1: i + 16]
-                if fwd and max(fwd) >= lows[i] * 1.03:
-                    pivots.append((lows[i], i))
-        pivots.sort()
-        clusters: List[Dict[str, Any]] = []
-        for p, i in pivots:
-            if clusters and p <= clusters[-1]["floor"] * (1 + tol):
-                clusters[-1]["pts"].append((p, i))
-            else:
-                clusters.append({"floor": p, "pts": [(p, i)]})
-        cands = []
-        for c in clusters:
-            touches = len(c["pts"])
-            level = sum(p for p, _ in c["pts"]) / touches
-            if touches < 2 or level >= cap:
-                continue
-            last = max(i for _, i in c["pts"])
-            age = n - 1 - last
-            cands.append({"price": level, "source": "history", "touches": touches, "last_i": last,
-                          "strength": touches + (0.5 if age <= 126 else 0.25 if age <= 252 else 0)})
-        for x in sorted(cands, key=lambda x: (-x["strength"], -x["price"])):
-            if all(abs(x["price"] / y["price"] - 1) >= 0.03 for y in chosen):
-                chosen.append(x)
-            if len(chosen) == count:
-                break
+        tol = min(max(atr, 0.012), 0.03)
+        # 1. reversal points (scored per zone below)
+        piv = [p for p in _pivots(candles, max(0.04, 2.5 * atr)) if floor <= p["price"] < cap]
+        cands += [{"price": p["price"], "w": 0.6, "group": "reversal", "key": "reversal", "pivot": p} for p in piv]
+        # 2. moving averages below the price
+        for days, w in MA_SET:
+            s = smas[days] = _sma(closes, days)
+            m = s[-1]
+            if m and floor <= m < cap:
+                held = _ma_holds(candles, s)
+                cands.append({"price": m, "w": w + 0.3 * min(held, 4), "group": "average", "key": f"ma{days}", "short": f"the {days}-day average",
+                              "text": f"{days}-day average" + (f", held {held}x in {round(n / 252)} yrs" if held else "")})
+        # 3. Fibonacci retracements of the main swing
+        fib = None
+        sw = _fib_swing(candles)
+        if sw:
+            il, ih = sw
+            lo, hi = candles[il]["l"], candles[ih]["h"]
+            fib = {"low": round(lo, 2), "high": round(hi, 2), "low_t": candles[il].get("t"), "high_t": candles[ih].get("t"),
+                   "levels": [{"ratio": r, "price": round(hi - (hi - lo) * r, 2)} for r, _ in FIB_RATIOS]}
+            for r, w in FIB_RATIOS:
+                lv = hi - (hi - lo) * r
+                if floor <= lv < cap:
+                    cands.append({"price": lv, "w": w, "group": "fib", "key": f"fib{round(r * 1000)}", "short": f"the {r * 100:.1f}% Fibonacci level",
+                                  "text": f"{r * 100:.1f}% Fibonacci retracement ({_money(lo)} to {_money(hi)} swing)"})
+        # 4. 52-week low
+        i52 = min(range(max(0, n - 252), n), key=lambda i: candles[i]["l"])
+        if floor <= candles[i52]["l"] < cap:
+            cands.append({"price": candles[i52]["l"], "w": 0.6, "group": "low52", "key": "low52", "text": "52-week low", "short": "the 52-week low"})
+        overlay = {"sma50": [round(v, 2) if v else None for v in smas.get(50, [])],
+                   "sma200": [round(v, 2) if v else None for v in smas.get(200, [])], "fib": fib, "reversals": []}
+    # 5. intrinsic value
+    if intrinsic and floor <= intrinsic < cap:
+        cands.append({"price": intrinsic, "w": 1.0, "group": "value", "key": "value", "text": "OptiIQ Value (intrinsic value)", "short": "the OptiIQ Value"})
+
+    # zones: signals within ~1 daily range of each other merge into one buy zone
+    zones: List[Dict[str, Any]] = []
+    for c in sorted(cands, key=lambda c: -c["price"]):
+        if zones and c["price"] >= zones[-1]["top"] * (1 - tol):
+            zones[-1]["m"].append(c)
+        else:
+            zones.append({"top": c["price"], "m": [c]})
+    for z in zones:
+        pts = [m["pivot"] for m in z["m"] if m["group"] == "reversal"]
+        sig = [m for m in z["m"] if m["group"] != "reversal"]
+        if pts:  # all reversal points in the zone become one signal
+            touches, last = len(pts), max(p["i"] for p in pts)
+            kinds, age = {p["kind"] for p in pts}, n - 1 - last
+            text = f"{touches} past reversal{'s' if touches > 1 else ''} here, last {_date(candles[last].get('t')) or 'recently'}"
+            if "high" in kinds:
+                text += " (old resistance, now support)" if "low" not in kinds else " (support and resistance)"
+            sig.append({"price": sum(p["price"] for p in pts) / touches, "group": "reversal", "key": "reversal", "text": text,
+                        "short": f"{touches} past reversal{'s' if touches > 1 else ''}", "touches": touches, "last_i": last, "points": pts,
+                        "w": 0.8 + 0.6 * min(touches - 1, 4) + (0.4 if age <= 126 else 0.2 if age <= 252 else 0) + (0.3 if len(kinds) == 2 else 0)})
+        z["m"] = sorted(sig, key=lambda m: -m["w"])
+        wsum = sum(m["w"] for m in sig)
+        z["price"] = sum(m["price"] * m["w"] for m in sig) / wsum
+        z["groups"] = {m["group"] for m in sig}
+        z["score"] = wsum + 0.5 * (len(z["groups"]) - 1)
+    chosen: List[Dict[str, Any]] = []
+    gap = max(0.03, 2 * tol)  # levels at least 3% (or two daily ranges) apart
+    near = lambda z: z["score"] * (1 - 0.8 * (1 - z["price"] / price))  # prefer nearer zones at equal strength
+    for z in sorted(zones, key=lambda z: -near(z)):
+        if all(abs(z["price"] / y["price"] - 1) >= gap for y in chosen):
+            chosen.append(z)
+        if len(chosen) == count:
+            break
+    ceiling = min(price, intrinsic) if intrinsic else price
     step = 1
     while len(chosen) < count and step <= 9:
         lvl = ceiling * (1 - 0.1 * step)
-        if lvl < cap and all(abs(lvl / y["price"] - 1) >= 0.03 for y in chosen):
-            chosen.append({"price": lvl, "source": "step", "step_pct": 10 * step})
+        if floor <= lvl < cap and all(abs(lvl / y["price"] - 1) >= gap for y in chosen):
+            chosen.append({"price": lvl, "step_pct": 10 * step, "score": 0, "groups": set(), "m": []})
         step += 1
-    out = []
-    for j, x in enumerate(sorted(chosen, key=lambda x: -x["price"]), 1):
-        d = {"label": f"B{j}", "price": round(x["price"], 2), "source": x["source"],
-             "below_price_pct": round((x["price"] / price - 1) * 100, 1),
-             "below_value_pct": round((x["price"] / intrinsic - 1) * 100, 1) if intrinsic else None}
-        if x["source"] == "history":
-            d["touches"] = x["touches"]
-            d["last_touch"] = _date(candles[x["last_i"]].get("t"))
+
+    levels = []
+    for j, z in enumerate(sorted(chosen, key=lambda z: -z["price"]), 1):
+        d: Dict[str, Any] = {"label": f"B{j}", "price": round(z["price"], 2),
+                             "below_price_pct": round((z["price"] / price - 1) * 100, 1),
+                             "below_value_pct": round((z["price"] / intrinsic - 1) * 100, 1) if intrinsic else None}
+        if z["m"]:
+            ms = z["m"]
+            d.update({"source": "confluence", "score": round(z["score"], 1), "zone_low": round(min(m["price"] for m in ms), 2),
+                      "zone_high": round(max(m["price"] for m in ms), 2), "signals": [m["key"] for m in ms],
+                      "reasons": [m["text"] for m in ms],
+                      "strength": "Strong" if z["score"] >= 5 or (z["score"] >= 4 and len(z["groups"]) >= 3) else "Moderate" if z["score"] >= 2.2 else "Light",
+                      "short": [m["short"] for m in ms]})
+            rev = [m for m in ms if m["group"] == "reversal"]
+            if rev:
+                d["touches"] = sum(m["touches"] for m in rev)
+                d["last_touch"] = _date(candles[max(m["last_i"] for m in rev)].get("t"))
+                if overlay is not None:
+                    overlay["reversals"] += [[candles[p["i"]].get("t"), round(p["price"], 2), p["kind"]] for m in rev for p in m["points"]]
         else:
-            d["step_pct"] = x["step_pct"]
-            d["step_from"] = "value" if intrinsic and intrinsic <= price else "price"
-        out.append(d)
-    return out
+            base = "OptiIQ Value" if intrinsic and intrinsic <= price else "price"
+            d.update({"source": "step", "step_pct": z["step_pct"], "step_from": "value" if base != "price" else "price",
+                      "strength": "Light", "signals": ["step"], "reasons": [f"{z['step_pct']}% step below the {base} (no support found here)"]})
+        levels.append(d)
+
+    parts = []
+    s200 = (smas.get(200) or [None])[-1]
+    if s200:
+        parts.append(f"Price is above its 200-day average ({_money(s200)}), a long-term uptrend." if price >= s200 else
+                     f"Price is below its 200-day average ({_money(s200)}), a long-term downtrend, so wait for a level to hold before buying.")
+    conf = [l for l in levels if l["source"] == "confluence"]
+    if conf:
+        best = max(conf, key=lambda l: l["score"])
+        sh = best["short"]
+        what = sh[0] if len(sh) == 1 else ", ".join(sh[:-1]) + " and " + sh[-1]
+        parts.append(f"Strongest buy zone: {best['label']} at {_money(best['price'])} ({best['below_price_pct']}%), where {what} line up.")
+    if intrinsic:
+        gap = round((price / intrinsic - 1) * 100, 1)
+        if gap > 0:
+            first = next((l for l in levels if l["price"] <= intrinsic), None)
+            parts.append(f"Price is {gap}% above OptiIQ Value" + (f"; {first['label']} is the first level at or below it." if first else "."))
+        else:
+            parts.append(f"Price is {abs(gap)}% below OptiIQ Value.")
+    return {"levels": levels, "overlay": overlay, "summary": " ".join(parts)}
 
 
 def register(api_router, *, db, get_user: Callable, send_push: Callable, market_open_now: Callable, logger) -> Dict[str, Callable]:
@@ -161,7 +294,8 @@ def register(api_router, *, db, get_user: Callable, send_push: Callable, market_
             price = ((await market.get_quote(client, tk)) or {}).get("price")
         doc: Dict[str, Any] = {
             "ticker": tk, "name": s["name"], "sector": s["sector"], "metrics": metrics,
-            "financials": [{k: r.get(k) for k in ("free_cash_flow", "cash", "total_debt", "equity")} for r in fins[-4:]],
+            "financials": [{k: r.get(k) for k in ("label", "end_date", "free_cash_flow", "operating_cash_flow", "net_income", "cash",
+                                                  "cash_and_investments", "total_debt", "equity")} for r in fins[-4:]],
             "fund_ts": time.time() - (FUND_TTL - RETRY_TTL if not (metrics.get("market_cap") and fins) else 0),
         }
         if price:
