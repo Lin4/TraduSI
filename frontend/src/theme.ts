@@ -2,7 +2,10 @@
 // `colors` and `themedStyles()` always resolve to the active theme; components call useTheme() so they
 // re-render when the user switches System / Light / Dark in Profile (saved on the device).
 import { useMemo, useSyncExternalStore } from "react";
-import { Appearance, StyleSheet } from "react-native";
+import { Appearance, StyleSheet, type ImageStyle, type TextStyle, type ViewStyle } from "react-native";
+
+// React Native 0.87+ strict types no longer export StyleSheet.NamedStyles
+type NamedStyles<T> = { [P in keyof T]: ViewStyle | TextStyle | ImageStyle };
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export type ColorScheme = "light" | "dark";
@@ -186,8 +189,8 @@ export function useTheme(): { scheme: ColorScheme; colors: ThemeColors } {
 
 /** Module-level stylesheet whose values follow the active theme (one cached StyleSheet per scheme).
  *  Components reading it must call useTheme() so they re-render on a switch. */
-export function themedStyles<T extends StyleSheet.NamedStyles<T> | StyleSheet.NamedStyles<any>>(
-  factory: (colors: ThemeColors) => T & StyleSheet.NamedStyles<any>,
+export function themedStyles<T extends NamedStyles<T> | NamedStyles<any>>(
+  factory: (colors: ThemeColors) => T & NamedStyles<any>,
 ): T {
   const cache: Partial<Record<ColorScheme, T>> = {};
   return new Proxy({} as T, {
@@ -198,8 +201,8 @@ export function themedStyles<T extends StyleSheet.NamedStyles<T> | StyleSheet.Na
   });
 }
 
-export function makeStyles<T extends StyleSheet.NamedStyles<T> | StyleSheet.NamedStyles<any>>(
-  factory: (colors: ThemeColors) => T & StyleSheet.NamedStyles<any>,
+export function makeStyles<T extends NamedStyles<T> | NamedStyles<any>>(
+  factory: (colors: ThemeColors) => T & NamedStyles<any>,
 ): () => T {
   return function useStyles(): T {
     const { colors } = useTheme();

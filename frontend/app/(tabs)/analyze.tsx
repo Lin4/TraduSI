@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { View, Text, ScrollView, Pressable } from "react-native";
+import { View, Text, ScrollView, Pressable, type ScrollViewInstance } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import Icon from "@react-native-vector-icons/feather";
@@ -46,7 +46,7 @@ function Analyze() {
   const [riskPct, setRiskPct] = useState("1");
   const [minRR, setMinRR] = useState("2");
   const plan = usePlan();
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
   const params = useLocalSearchParams<{ ticker?: string; strategy?: string; range?: string }>();
 
   useEffect(() => {

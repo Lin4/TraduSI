@@ -218,3 +218,6 @@ Research-first, transparent, trust-driven AI intelligence platform. AI acts as a
 - After 7 days (tier "expired"): Discover, Analyze, Chain, ticker detail -> PlanGate paywall (ticker page has "Go back"). Portfolio and Alerts stay readable with TrialEndedBanner; adding tickers/alerts, Ask AI review, smart "Check now" hidden (add-alert opens /upgrade).
 - Iteration 31 fixes: Discover profile locks use features.strategy_tier (trial = Advance unlocks Low risk · Higher reward); paywall has "Profile & sign out" link; expired Profile price "Free · ended"; buy-level meta wraps; watchlist remove hitSlop.
 - KNOWN GAP (not fixed): the lock is only in the app. The server trusts the client-sent `tier` (needed because RevenueCat/App Store purchases are only known on the phone) and doesn't block expired users on stock-analysis / alerts/add / watchlist/add. A proper fix needs server-side RevenueCat verification.
+
+## Update (Jun 2026) - Expo SDK 58
+- Upgraded Expo SDK 57 -> 58 (React Native 0.88, React 19.3, expo-router 58, gesture-handler 3.3, reanimated 4.7). expo-asset added (peer of expo-audio). Strict RN TypeScript API fixes in theme.ts, analyze.tsx, CodeInput.tsx, chain.tsx. Expo Go for SDK 58 ships to the stores a few weeks after Oct 15, 2026.

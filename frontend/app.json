@@ -22,7 +22,10 @@
         "backgroundColor": "#2563EB"
       },
       "package": "com.optiiq.app",
-      "permissions": ["RECORD_AUDIO", "POST_NOTIFICATIONS"]
+      "permissions": [
+        "RECORD_AUDIO",
+        "POST_NOTIFICATIONS"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -61,7 +64,8 @@
         {
           "microphonePermission": "Record voice queries to analyze stocks hands-free"
         }
-      ]
+      ],
+      "expo-asset"
     ],
     "experiments": {
       "typedRoutes": true

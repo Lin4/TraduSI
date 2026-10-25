@@ -159,7 +159,7 @@ function ChainScreen() {
       </View>
 
       <ScrollView contentContainerStyle={st.scroll}
-        refreshControl={<RefreshControl refreshing={false} onRefresh={() => exp && loadChain(ticker, exp)} />}>
+        refreshControl={<RefreshControl refreshing={false} onRefresh={() => { if (exp) loadChain(ticker, exp); }} />}>
         {view === "chain" ? (
           <ChainTable rows={rows} price={chain?.price} loading={loading} onTap={addLeg}
             showAll={showAll} toggleAll={() => setShowAll((v) => !v)} />

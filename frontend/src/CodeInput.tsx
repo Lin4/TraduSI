@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { View, Text, Pressable, TextInput, Platform } from "react-native";
+import { View, Text, Pressable, TextInput, Platform, type TextInputInstance } from "react-native";
 import Icon from "@react-native-vector-icons/feather";
 
 import { colors, spacing, radius, themedStyles, useTheme } from "./theme";
@@ -12,7 +12,7 @@ export function CodeInput({ value, onChange, onComplete, error, hint, testID = "
   testID?: string; autoFocus?: boolean;
 }) {
   useTheme();
-  const input = useRef<TextInput>(null);
+  const input = useRef<TextInputInstance>(null);
   const [focused, setFocused] = useState(false);
 
   useEffect(() => { if (error) input.current?.focus(); }, [error]);

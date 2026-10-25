@@ -148,3 +148,10 @@
 - Plans: billing.FEATURES["trial"] = Advance features (unlimited scans, spreads, 20 alerts, smart alerts, AI explain, backtest, Ask AI 30/5). Frontend plans.tsx same + FREE_CARD (onboarding plan screen, upgrade screen Free card with CURRENT/ENDED tag, Profile plan card).
 - Expired (7 days after sign-up, no paid plan): Discover/Analyze/Chain/ticker detail show PlanGate paywall (ticker page has Go back). Portfolio + Alerts are no longer paywalled: TrialEndedBanner, saved strategies/watchlist/alerts visible, add-ticker card + Ask AI review + strategies-empty hidden, alerts "+" opens /upgrade, "Check now" hidden, usage text "N saved alerts".
 - needs_retesting: true
+
+## Iteration 32 (main agent) - Expo SDK 57 -> 58 upgrade
+- `yarn expo install expo@^58.0.0` + `yarn expo install --fix` + `yarn expo install expo-asset` (missing peer of expo-audio; app.json plugins gained "expo-asset"). expo-doctor 20/20.
+- Now: expo 58.0.19, react-native 0.88.0, react 19.3.0, expo-router 58.0.26, react-native-gesture-handler ~3.3.0, reanimated 4.7.1, worklets 0.13.0, screens ~4.30, safe-area-context ~5.10.1, webview 14.0.1, keyboard-controller 1.22.7, expo-notifications ~58.1.6.
+- RN strict TS API fixes: src/theme.ts local NamedStyles type (StyleSheet.NamedStyles removed), analyze.tsx useRef<ScrollViewInstance>, CodeInput.tsx useRef<TextInputInstance>, chain.tsx RefreshControl onRefresh returns void. tsc + eslint clean.
+- Router checklist: all tabs declared in (tabs)/_layout, no initialRouteName/screen-params navigation, web.output "single" explicit, +html.tsx has no navigation hooks, SafeAreaProvider in root layout. Metro cache cleared.
+- needs_retesting: true (frontend regression across all screens)

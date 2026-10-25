@@ -1,0 +1,33 @@
+{
+  "summary": "Frontend regression pass after the Expo SDK 58 upgrade (expo 58.0.19 / RN 0.88 / React 19.3), on the web preview at 375x667. All 12 requested flows passed with no red screens and no new runtime errors. Login as trader lands on Discover (scan-usage). All 6 tabs render. Discover Best scan (week) returned 5 results, and tapping one pushes /analyze?ticker&strategy&range, which auto-runs and shows optiscore-card plus the trade plan. The options analysis for AAPL works. MSFT Long-term shows optiiq-card ($527.55, +0.6% vs price), buy-levels with its SVG chart, and the scenarios editor; dcf-recalc calls /api/screener/valuation and the content updates. Chain (AAPL): 22 expiration chips, chain-table, expiry switch, Strategy view from a template (2 legs, /api/chain/analyze) with the SVG P&L chart. Portfolio and Alerts render; creating an alert (modal) and deleting it works. Profile: Dark/Light theme switch applies everywhere (checked on Chain, Learn, Profile). /upgrade shows Free plus simple/advance/expert. Ask AI opens and a quick question returns an answer (1 question used: 30 -> 29). On Forgot password, the 6-box CodeInput auto-focuses, accepts typing and shows the digits. Expired user: paywall with 'Profile & sign out' (goes to /profile); Portfolio and Alerts are readable with the trial-ended banner. Track record Live and Backtest tabs render the charts. tsc --noEmit is clean and 'expo install --check' says dependencies are up to date. Console shows only the expected 401s before login, the expo-notifications web warning, and the useNativeDriver fallback warning on web.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Ask AI answer rendering", "issue": "Italic markdown is not parsed: the disclaimer shows literally as '*Educational research, not financial advice.*'. Bold and bullet points render correctly. Not related to the upgrade.", "testID": "chat-list", "priority": "low"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Alerts", "issues": ["The alert row shows 'price above $9999' with no thousands separator; use toLocaleString."]}
+    ],
+    "react_native_issues": [
+      {"component": "Toast pointerEvents prop", "issue": "react-native-web logs 'props.pointerEvents is deprecated. Use style.pointerEvents' (it appeared many times in older expo logs). Reference: /app/frontend/src/Toast.tsx:26"}
+    ]
+  },
+  "test_report_links": ["/app/test_reports/iteration_32.json"],
+  "action_items": [
+    "Low: in src/Toast.tsx:26, move pointerEvents=\"none\" into the style ({pointerEvents: 'none'}) to clear the react-native-web deprecation warning.",
+    "Low: in the Ask AI markdown renderer, handle single-asterisk italics.",
+    "Low: format the alert thresholds with thousands separators."
+  ],
+  "critical_code_review_comments": [
+    "No deprecated packages found (no expo-av, expo-barcode-scanner or expo-background-fetch). The useRef<ScrollViewInstance> / useRef<TextInputInstance> type changes compile and work at runtime (scrollTo and focus both OK).",
+    "Chain makes duplicate GET calls on search: /api/chain/{t}/expirations and /api/chain/{t}?expiration=... each fire twice. Possibly dev StrictMode or a double effect; worth a check.",
+    "The 'Maximum update depth exceeded' ErrorBoundary entries and the iOS 'Project is incompatible with Expo Go (project SDK 57)' errors in expo.out.log are all from before the upgrade. None appeared since the latest Metro start."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (frontend only)", "frontend": "100% (12/12 requested flows)"},
+  "seed_data_creation": "None. A test alert for trader (NVDA price_above 9999) was created and then deleted. Ask AI quota for trader: 1 question used. A password-reset request was sent for the unknown address delivered+sdk58nouser@resend.dev (no account exists). The trader theme was reset to Light.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "SDK 58 web regression passed. Tips: after tapping add-alert, wait about 1.5s for the slide animation before clicking chips. Use a delivered+x@resend.dev address on Forgot password to reach the code-entry step without touching real accounts (.invalid TLDs return 422). One early run with page.goto('/analyze?ticker=AAPL') right after login timed out waiting for 'OptiScore'; the identical deep link passed on retry. Treated as a slow cold request rather than a bug."
+}
