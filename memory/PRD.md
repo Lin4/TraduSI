@@ -227,3 +227,6 @@ Research-first, transparent, trust-driven AI intelligence platform. AI acts as a
 - BLOCKER: Atlas returns AuthenticationFailed (code 18): the saved SHARED_MONGO_URL still contains the `<db_password>` placeholder. User skipped re-entering it. Re-request with secrets_request.
 - Ready: backend/scripts/migrate_to_atlas.py (dry run by default; `--apply` upserts every doc by _id + copies indexes; reports email clashes if target already has users). Source optiscreen_db: 21 collections (users 30, valuation_board 499, picks 114, ...).
 - After a successful --apply: switch server.py client to os.environ["SHARED_MONGO_URL"] / ["SHARED_DB_NAME"] (MONGO_URL itself is platform-protected), restart, verify login. Only the preview DB is reachable from here; the published app's own DB isn't.
+
+## Update (Jun 2026) - Accounts cleanup
+- User asked to delete every account except admin lingesa4@gmail.com. Deleted 29 users + their sessions, chats, alerts, alert events, watchlists, lesson progress, usage, plan history, broadcast reads, pending sign-ups. Payment records (5) kept (default). Preview DB only.
