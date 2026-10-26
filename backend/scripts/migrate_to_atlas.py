@@ -22,11 +22,18 @@ print(f"{'APPLY' if APPLY else 'DRY RUN'}: {env['DB_NAME']} -> Atlas '{env['SHAR
 print("Collections already in Atlas:", {c: tgt[c].estimated_document_count() for c in sorted(existing)} or "none")
 
 # Same email registered in both databases under different accounts would break login, so report it.
+clashes = []
 if "users" in existing:
     src_users = {u["email"]: u.get("user_id") for u in src.users.find({}, {"email": 1, "user_id": 1})}
     clashes = [u["email"] for u in tgt.users.find({"email": {"$in": list(src_users)}}, {"email": 1, "user_id": 1})
                if src_users.get(u["email"]) != u.get("user_id")]
     print(f"Email clashes (same email, different account): {len(clashes)}", clashes[:20])
+
+    if APPLY and clashes:
+        # Local account wins: drop the Atlas record with the same email (e.g. a password-less Google sign-in record)
+        for u in src.users.find({"email": {"$in": clashes}}, {"email": 1}):
+            r = tgt.users.delete_many({"email": u["email"], "_id": {"$ne": u["_id"]}})
+            print(f"  replaced Atlas record(s) for {u['email']}: removed {r.deleted_count}")
 
 for name in sorted(src.list_collection_names()):
     col = src[name]
@@ -50,7 +57,10 @@ for name in sorted(src.list_collection_names()):
         if idx_name == "_id_":
             continue
         opts = {k: v for k, v in info.items() if k not in ("key", "v", "ns")}
-        tgt[name].create_index(info["key"], name=idx_name, **opts)
+        try:
+            tgt[name].create_index(info["key"], name=idx_name, **opts)
+        except Exception as e:  # an index the web app already created with other options; data is unaffected
+            print(f"    index {idx_name} skipped: {getattr(e, 'code', '')} {str(e)[:120]}")
     print(f"  {name}: copied {copied}/{total}, Atlas now has {tgt[name].count_documents({})}")
 
 if APPLY:
