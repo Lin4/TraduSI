@@ -221,3 +221,9 @@ Research-first, transparent, trust-driven AI intelligence platform. AI acts as a
 
 ## Update (Jun 2026) - Expo SDK 58
 - Upgraded Expo SDK 57 -> 58 (React Native 0.88, React 19.3, expo-router 58, gesture-handler 3.3, reanimated 4.7). expo-asset added (peer of expo-audio). Strict RN TypeScript API fixes in theme.ts, analyze.tsx, CodeInput.tsx, chain.tsx. Expo Go for SDK 58 ships to the stores a few weeks after Oct 15, 2026.
+
+## In progress (Jun 2026) - Move data to MongoDB Atlas (BLOCKED on user)
+- Secrets saved: SHARED_MONGO_URL (Atlas connection string), SHARED_DB_NAME (target db name). User added 0.0.0.0/0 to Atlas Network Access; TCP to cluster works.
+- BLOCKER: Atlas returns AuthenticationFailed (code 18): the saved SHARED_MONGO_URL still contains the `<db_password>` placeholder. User skipped re-entering it. Re-request with secrets_request.
+- Ready: backend/scripts/migrate_to_atlas.py (dry run by default; `--apply` upserts every doc by _id + copies indexes; reports email clashes if target already has users). Source optiscreen_db: 21 collections (users 30, valuation_board 499, picks 114, ...).
+- After a successful --apply: switch server.py client to os.environ["SHARED_MONGO_URL"] / ["SHARED_DB_NAME"] (MONGO_URL itself is platform-protected), restart, verify login. Only the preview DB is reachable from here; the published app's own DB isn't.
