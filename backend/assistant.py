@@ -1,8 +1,10 @@
 """Ask AI: Claude chat assistant grounded in TraduSI's live data, with saved history and per-plan daily limits.
 Quick answers use Claude Sonnet 5.5, deep analysis uses Claude Opus 5.5 (Emergent LLM key)."""
+import asyncio
 import json
 import os
 import re
+import time
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Literal, Optional
@@ -17,8 +19,9 @@ from emergentintegrations.llm.chat import LlmChat, UserMessage, TextDelta, Strea
 EMERGENT_LLM_KEY = os.environ.get("EMERGENT_LLM_KEY", "")
 NY = ZoneInfo("America/New_York")
 MODELS = {
-    "quick": {"id": "claude-sonnet-5-5", "label": "Claude Sonnet 5.5", "max_tokens": 1500},
-    "deep": {"id": "claude-opus-5-5", "label": "Claude Opus 5.5", "max_tokens": 4000},
+    # effort caps Claude's hidden reasoning, which otherwise uses up max_tokens and cuts the visible answer off
+    "quick": {"id": "claude-sonnet-5-5", "label": "Claude Sonnet 5.5", "max_tokens": 6000, "effort": "low"},
+    "deep": {"id": "claude-opus-5-5", "label": "Claude Opus 5.5", "max_tokens": 16000, "effort": "medium"},
 }
 HISTORY_MESSAGES = 12
 MAX_TICKERS = 2
@@ -66,6 +69,7 @@ def find_tickers(text: str, universe: set) -> List[str]:
 
 def register(router, *, db, get_user, access_for, ticker_context, user_context, universe: set, logger):
     chats, msgs = db.ai_chats, db.ai_messages
+    running: set = set()  # strong refs so answers keep generating after the client's connection drops
 
     async def usage(user: Dict[str, Any]) -> Dict[str, Any]:
         f = access_for(user)["features"]
@@ -103,6 +107,18 @@ def register(router, *, db, get_user, access_for, ticker_context, user_context, 
         await chats.delete_one({"chat_id": chat_id})
         return {"ok": True}
 
+    @router.get("/assistant/messages/{message_id}")
+    async def get_message(message_id: str, authorization: Optional[str] = Header(default=None)):
+        """Lets the app pick up the rest of an answer when the streaming connection was cut (e.g. 60s proxy limit)."""
+        user = await get_user(authorization)
+        m = await msgs.find_one({"message_id": message_id, "user_id": user["user_id"]}, {"_id": 0})
+        if not m:
+            raise HTTPException(404, "Message not found")
+        out = {"message_id": message_id, "status": m.get("status", "done"), "content": m.get("content", "")}
+        if out["status"] != "streaming":
+            out["usage"] = await usage(user)
+        return out
+
     @router.post("/assistant/chat")
     async def chat(req: ChatReq, authorization: Optional[str] = Header(default=None)):
         user = await get_user(authorization)
@@ -130,47 +146,69 @@ def register(router, *, db, get_user, access_for, ticker_context, user_context, 
             tickers = [req.ticker.upper().strip()] + tickers
         tickers = tickers[:MAX_TICKERS] or (c.get("tickers") or [])[-1:]  # follow-ups reuse the chat's last ticker
 
-        history = await msgs.find({"chat_id": chat_id, "failed": {"$ne": True}}, {"_id": 0, "role": 1, "content": 1}) \
-            .sort("created_at", -1).to_list(HISTORY_MESSAGES)
+        history = await msgs.find({"chat_id": chat_id, "failed": {"$ne": True}, "status": {"$ne": "streaming"}},
+                                  {"_id": 0, "role": 1, "content": 1}).sort("created_at", -1).to_list(HISTORY_MESSAGES)
         history.reverse()
         user_msg = {"message_id": f"msg_{uuid.uuid4().hex[:12]}", "chat_id": chat_id, "user_id": user["user_id"],
                     "role": "user", "content": text, "mode": req.mode, "tickers": tickers, "created_at": t}
         await msgs.insert_one(dict(user_msg))
         model = MODELS[req.mode]
+        reply_id = f"msg_{uuid.uuid4().hex[:12]}"
+        await msgs.insert_one({"message_id": reply_id, "chat_id": chat_id, "user_id": user["user_id"], "role": "assistant",
+                               "content": "", "status": "streaming", "mode": req.mode, "model": model["label"],
+                               "tickers": [], "created_at": _now()})
+        queue: asyncio.Queue = asyncio.Queue()
 
-        async def events():
-            answer = ""
+        async def generate():
+            """Runs independently of the HTTP response, so the answer is finished and saved even if the connection drops."""
+            answer, saved_at = "", time.monotonic()
             try:
                 contexts = [x for x in [await ticker_context(tk, authorization) for tk in tickers] if x]
                 live = {"as_of_utc": _now().strftime("%Y-%m-%d %H:%M"), "user": await user_context(user), "tickers": contexts}
-                yield _sse({"type": "meta", "chat_id": chat_id, "model": model["label"], "mode": req.mode,
-                            "user_message_id": user_msg["message_id"],
-                            "tickers": [{"ticker": x["ticker"], "price": x.get("price"), "change_pct": x.get("change_pct")} for x in contexts]})
+                queue.put_nowait({"type": "meta", "chat_id": chat_id, "model": model["label"], "mode": req.mode,
+                                  "user_message_id": user_msg["message_id"], "message_id": reply_id,
+                                  "tickers": [{"ticker": x["ticker"], "price": x.get("price"), "change_pct": x.get("change_pct")} for x in contexts]})
                 prompt = (f"{text}\n\n{DEEP_NOTE if req.mode == 'deep' else ''}\n---\nLIVE DATA (JSON):\n"
                           f"{json.dumps(live, default=str, separators=(',', ':'))}\n---")
                 llm = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=chat_id, system_message=SYSTEM,
                               initial_messages=[{"role": "system", "content": SYSTEM}] + history) \
-                    .with_model("anthropic", model["id"]).with_params(max_tokens=model["max_tokens"])
+                    .with_model("anthropic", model["id"]).with_params(
+                        max_tokens=model["max_tokens"], extra_body={"output_config": {"effort": model["effort"]}})
                 async for ev in llm.stream_message(UserMessage(text=prompt)):
                     if isinstance(ev, TextDelta):
                         answer += ev.content
-                        yield _sse({"type": "delta", "text": ev.content})
+                        queue.put_nowait({"type": "delta", "text": ev.content})
+                        if time.monotonic() - saved_at > 2:  # partial answer for the app to fetch after a dropped connection
+                            saved_at = time.monotonic()
+                            await msgs.update_one({"message_id": reply_id}, {"$set": {"content": answer}})
                     elif isinstance(ev, StreamDone):
+                        if ev.finish_reason == "length" and answer.strip():
+                            note = "\n\n_…answer hit the length limit. Ask \"continue\" for the rest._"
+                            answer += note
+                            queue.put_nowait({"type": "delta", "text": note})
                         break
                 if not answer.strip():
                     raise RuntimeError("empty answer")
-                done = _now()
-                reply = {"message_id": f"msg_{uuid.uuid4().hex[:12]}", "chat_id": chat_id, "user_id": user["user_id"],
-                         "role": "assistant", "content": answer, "mode": req.mode, "model": model["label"],
-                         "tickers": [x["ticker"] for x in contexts], "created_at": done}
-                await msgs.insert_one(dict(reply))
-                await chats.update_one({"chat_id": chat_id}, {"$set": {"updated_at": done, "last_model": model["label"],
+                await msgs.update_one({"message_id": reply_id}, {"$set": {"content": answer, "status": "done",
+                                                                          "tickers": [x["ticker"] for x in contexts]}})
+                await chats.update_one({"chat_id": chat_id}, {"$set": {"updated_at": _now(), "last_model": model["label"],
                                                                           "tickers": tickers or c.get("tickers") or []}})
-                yield _sse({"type": "done", "message_id": reply["message_id"], "usage": await usage(user)})
+                queue.put_nowait({"type": "done", "message_id": reply_id, "usage": await usage(user)})
             except Exception as ex:
                 logger.exception(f"assistant chat failed: {ex}")
                 await msgs.update_one({"message_id": user_msg["message_id"]}, {"$set": {"failed": True}})
-                yield _sse({"type": "error", "detail": "The AI couldn't answer right now. Please try again — this question wasn't counted."})
+                await msgs.update_one({"message_id": reply_id}, {"$set": {"status": "failed", "failed": True}})
+                queue.put_nowait({"type": "error", "detail": "The AI couldn't answer right now. Please try again — this question wasn't counted."})
+            finally:
+                queue.put_nowait(None)
+
+        task = asyncio.create_task(generate())
+        running.add(task)
+        task.add_done_callback(running.discard)
+
+        async def events():
+            while (ev := await queue.get()) is not None:
+                yield _sse(ev)
 
         return StreamingResponse(events(), media_type="text/event-stream",
                                  headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})

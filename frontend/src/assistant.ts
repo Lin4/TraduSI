@@ -5,7 +5,7 @@ import { getToken } from "./api";
 const BASE = process.env.EXPO_PUBLIC_BACKEND_URL;
 
 export type ChatEvent =
-  | { type: "meta"; chat_id: string; model: string; mode: string; user_message_id: string; tickers: { ticker: string; price: number; change_pct?: number }[] }
+  | { type: "meta"; chat_id: string; model: string; mode: string; user_message_id: string; message_id: string; tickers: { ticker: string; price: number; change_pct?: number }[] }
   | { type: "delta"; text: string }
   | { type: "done"; message_id: string; usage: Usage }
   | { type: "error"; detail: string };

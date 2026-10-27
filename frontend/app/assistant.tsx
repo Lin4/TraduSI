@@ -59,6 +59,19 @@ export default function Assistant() {
   const patch = (id: string, p: Partial<ChatMsg> | ((m: ChatMsg) => Partial<ChatMsg>)) =>
     setMessages((ms) => ms.map((m) => (m.id === id ? { ...m, ...(typeof p === "function" ? p(m) : p) } : m)));
 
+  /** Long answers (deep analysis) can outlast the connection; the server keeps writing, so fetch the rest. */
+  const followReply = async (aid: string, id: string) => {
+    for (let i = 0; i < 150; i++) {
+      await new Promise((r) => setTimeout(r, 2000));
+      try {
+        const r = await api(`/api/assistant/messages/${id}`);
+        if (r.status === "failed") { patch(aid, { error: "The AI couldn't finish this answer. Please try again — this question wasn't counted." }); return; }
+        patch(aid, (m) => (r.status === "done" || r.content.length > m.content.length ? { content: r.content } : {}));
+        if (r.status === "done") { if (r.usage) setUsage(r.usage); return; }
+      } catch {}
+    }
+  };
+
   const send = async (textArg?: string) => {
     const text = (textArg ?? input).trim();
     if (!text || busy) return;
@@ -68,16 +81,20 @@ export default function Assistant() {
     setBusy(true);
     const stamp = Date.now();
     const aid = `a${stamp}`;
+    const st = { replyId: "", finished: false };
     setMessages((ms) => [...ms, { id: `u${stamp}`, role: "user", content: text }, { id: aid, role: "assistant", content: "", streaming: true, model: MODE_LABEL[mode] }]);
     try {
       await streamChat({ message: text, chat_id: chatId, mode, ticker: pinned }, (e) => {
-        if (e.type === "meta") { setChatId(e.chat_id); patch(aid, { model: e.model, tickers: e.tickers }); }
+        if (e.type === "meta") { st.replyId = e.message_id; setChatId(e.chat_id); patch(aid, { model: e.model, tickers: e.tickers }); }
         else if (e.type === "delta") patch(aid, (m) => ({ content: m.content + e.text }));
-        else if (e.type === "done") { patch(aid, { streaming: false }); setUsage(e.usage); }
-        else if (e.type === "error") patch(aid, { streaming: false, error: e.detail });
+        else if (e.type === "done") { st.finished = true; patch(aid, { streaming: false }); setUsage(e.usage); }
+        else if (e.type === "error") { st.finished = true; patch(aid, { streaming: false, error: e.detail }); }
       });
     } catch (e: any) {
-      patch(aid, { streaming: false, error: e.message || "Something went wrong" });
+      if (!st.replyId) patch(aid, { streaming: false, error: e.message || "Something went wrong" });
+    }
+    try {
+      if (st.replyId && !st.finished) await followReply(aid, st.replyId);
     } finally {
       patch(aid, { streaming: false });
       setBusy(false);
