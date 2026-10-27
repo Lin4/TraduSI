@@ -51,10 +51,11 @@ import market
 import signup
 import account
 import assistant
+from atlas import shared_mongo_url
 
-mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
+# Shared MongoDB Atlas database: the web app and this mobile app read the same users, settings and data
+client = AsyncIOMotorClient(shared_mongo_url(os.environ))
+db = client[os.environ['SHARED_DB_NAME']]
 market.CANDLE_STORE = db.candle_cache  # daily bars survive restarts
 
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY', '')

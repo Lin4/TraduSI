@@ -222,7 +222,7 @@ Research-first, transparent, trust-driven AI intelligence platform. AI acts as a
 ## Update (Jun 2026) - Expo SDK 58
 - Upgraded Expo SDK 57 -> 58 (React Native 0.88, React 19.3, expo-router 58, gesture-handler 3.3, reanimated 4.7). expo-asset added (peer of expo-audio). Strict RN TypeScript API fixes in theme.ts, analyze.tsx, CodeInput.tsx, chain.tsx. Expo Go for SDK 58 ships to the stores a few weeks after Oct 15, 2026.
 
-## In progress (Jun 2026) - Move data to MongoDB Atlas (BLOCKED on user)
+## DONE (Jun 2026) - Move data to MongoDB Atlas (history below)
 - Secrets saved: SHARED_MONGO_URL (Atlas connection string), SHARED_DB_NAME (target db name). User added 0.0.0.0/0 to Atlas Network Access; TCP to cluster works.
 - BLOCKER: Atlas returns AuthenticationFailed (code 18): the saved SHARED_MONGO_URL still contains the `<db_password>` placeholder. User skipped re-entering it. Re-request with secrets_request.
 - Ready: backend/scripts/migrate_to_atlas.py (dry run by default; `--apply` upserts every doc by _id + copies indexes; reports email clashes if target already has users). Source optiscreen_db: 21 collections (users 30, valuation_board 499, picks 114, ...).
@@ -230,3 +230,7 @@ Research-first, transparent, trust-driven AI intelligence platform. AI acts as a
 
 ## Update (Jun 2026) - Accounts cleanup
 - User asked to delete every account except admin lingesa4@gmail.com. Deleted 29 users + their sessions, chats, alerts, alert events, watchlists, lesson progress, usage, plan history, broadcast reads, pending sign-ups. Payment records (5) kept (default). Preview DB only.
+
+- DONE: backend now uses the shared Atlas db for everything: server.py -> AsyncIOMotorClient(atlas.shared_mongo_url(os.environ))[SHARED_DB_NAME]. backend/atlas.py fills SHARED_MONGO_USER/SHARED_MONGO_PASSWORD (URL-encoded) into SHARED_MONGO_URL. SHARED_DB_NAME = optionscope-optiscreen_db (same db the web app uses). All 4 SHARED_* secrets have test + live slots; published app switches on next publish.
+- Copy done with scripts/migrate_to_atlas.py --apply (upsert by _id; iv_history by ticker+date, picks by key). The web's password-less Google record for lingesa4@gmail.com was replaced by the local admin record (user_id user_69936c14d714, bcrypt password, is_admin, expert, questionnaire, consent); its 2 web sessions were moved to that user_id. Verified: login OK, wrong password rejected, /auth/me admin expert.
+- Local MongoDB (MONGO_URL/DB_NAME) is no longer used by the app; kept as a backup copy.

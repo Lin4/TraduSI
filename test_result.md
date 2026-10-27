@@ -155,3 +155,6 @@
 - RN strict TS API fixes: src/theme.ts local NamedStyles type (StyleSheet.NamedStyles removed), analyze.tsx useRef<ScrollViewInstance>, CodeInput.tsx useRef<TextInputInstance>, chain.tsx RefreshControl onRefresh returns void. tsc + eslint clean.
 - Router checklist: all tabs declared in (tabs)/_layout, no initialRouteName/screen-params navigation, web.output "single" explicit, +html.tsx has no navigation hooks, SafeAreaProvider in root layout. Metro cache cleared.
 - needs_retesting: true (frontend regression across all screens)
+
+## Iteration 33 (main agent) - Backend switched to shared MongoDB Atlas
+- server.py uses SHARED_MONGO_URL (+ SHARED_MONGO_USER/PASSWORD via backend/atlas.py) and SHARED_DB_NAME=optionscope-optiscreen_db. All local data copied; admin record replaces the web Google record. Login verified via curl + UI. Test users now land in the shared Atlas db (also seen by the web app) - clean them up after tests.

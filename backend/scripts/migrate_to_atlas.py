@@ -10,12 +10,16 @@ from pathlib import Path
 from dotenv import dotenv_values
 from pymongo import MongoClient, ReplaceOne
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from atlas import shared_mongo_url  # noqa: E402
+
 env = dotenv_values(Path(__file__).resolve().parent.parent / ".env")
 APPLY = "--apply" in sys.argv
 BATCH = 500
+NATURAL_KEYS = {"iv_history": ("ticker", "date"), "picks": ("key",)}
 
 src = MongoClient(env["MONGO_URL"])[env["DB_NAME"]]
-tgt = MongoClient(env["SHARED_MONGO_URL"], serverSelectionTimeoutMS=20000)[env["SHARED_DB_NAME"]]
+tgt = MongoClient(shared_mongo_url(env), serverSelectionTimeoutMS=20000)[env["SHARED_DB_NAME"]]
 
 existing = set(tgt.list_collection_names())
 print(f"{'APPLY' if APPLY else 'DRY RUN'}: {env['DB_NAME']} -> Atlas '{env['SHARED_DB_NAME']}'")
@@ -31,9 +35,12 @@ if "users" in existing:
 
     if APPLY and clashes:
         # Local account wins: drop the Atlas record with the same email (e.g. a password-less Google sign-in record)
-        for u in src.users.find({"email": {"$in": clashes}}, {"email": 1}):
+        # and move that record's sign-in sessions to the local account so the web app stays signed in.
+        for u in src.users.find({"email": {"$in": clashes}}, {"email": 1, "user_id": 1}):
+            old_ids = [d["user_id"] for d in tgt.users.find({"email": u["email"], "_id": {"$ne": u["_id"]}}, {"user_id": 1})]
             r = tgt.users.delete_many({"email": u["email"], "_id": {"$ne": u["_id"]}})
-            print(f"  replaced Atlas record(s) for {u['email']}: removed {r.deleted_count}")
+            s = tgt.user_sessions.update_many({"user_id": {"$in": old_ids}}, {"$set": {"user_id": u["user_id"]}})
+            print(f"  replaced Atlas record(s) for {u['email']}: removed {r.deleted_count}, sessions moved {s.modified_count}")
 
 for name in sorted(src.list_collection_names()):
     col = src[name]
@@ -42,8 +49,13 @@ for name in sorted(src.list_collection_names()):
         print(f"  {name}: {total} docs")
         continue
     copied, ops = 0, []
+    natural = NATURAL_KEYS.get(name)
     for doc in col.find({}):
-        ops.append(ReplaceOne({"_id": doc["_id"]}, doc, upsert=True))
+        if natural:  # match on the real key so the same day/pick isn't stored twice under different _ids
+            body = {k: v for k, v in doc.items() if k != "_id"}
+            ops.append(ReplaceOne({k: doc.get(k) for k in natural}, body, upsert=True))
+        else:
+            ops.append(ReplaceOne({"_id": doc["_id"]}, doc, upsert=True))
         if len(ops) >= BATCH:
             tgt[name].bulk_write(ops, ordered=False)
             copied += len(ops)
