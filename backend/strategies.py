@@ -7,7 +7,7 @@ from typing import Any, Callable, Dict, List, Literal, Optional
 
 import httpx
 from fastapi import Header, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 import tradier
 from chain import LegIn, _tk, _exp, analyze_position, prepare_legs
@@ -22,6 +22,11 @@ class Threshold(BaseModel):
     value: float = Field(gt=0, le=1e7)
 
 
+class Invalidation(BaseModel):
+    below: Optional[float] = Field(default=None, gt=0, le=1e6, allow_inf_nan=False)
+    above: Optional[float] = Field(default=None, gt=0, le=1e6, allow_inf_nan=False)
+
+
 class SaveStrategyReq(BaseModel):
     name: str = Field(min_length=1, max_length=60)
     ticker: str = Field(min_length=1, max_length=10)
@@ -30,6 +35,17 @@ class SaveStrategyReq(BaseModel):
     target: Optional[Threshold] = None
     stop: Optional[Threshold] = None
     strategy_type: Optional[str] = Field(default=None, max_length=40)  # template name when built from one
+    # one-tap trade plan: the plan's time exit and the stock levels that invalidate it also alert
+    time_exit: Optional[str] = None
+    invalidation: Optional[Invalidation] = None
+    source: Optional[Literal["trade_plan", "chain"]] = None
+
+    @field_validator("time_exit")
+    @classmethod
+    def _date(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None:
+            date.fromisoformat(v)
+        return v
 
 
 class UpdateStrategyReq(BaseModel):
@@ -206,6 +222,15 @@ def register(api_router, *, db, get_user: Callable, get_quote: Callable, send_pu
             hits.append(("target", f"🎯 Profit target hit: {s['name']}", f"{s['ticker']} P&L +${m['pnl']:,.0f} (target ${m['target_usd']:,.0f})"))
         if m["stop_usd"] and m["pnl"] <= -m["stop_usd"] and not fired.get("stop"):
             hits.append(("stop", f"🛑 Stop loss hit: {s['name']}", f"{s['ticker']} P&L -${abs(m['pnl']):,.0f} (stop -${m['stop_usd']:,.0f})"))
+        pnl_txt = f"P&L {'+' if m['pnl'] >= 0 else '-'}${abs(m['pnl']):,.0f}"
+        if s.get("time_exit") and date.today().isoformat() >= s["time_exit"] and not fired.get("time"):
+            hits.append(("time", f"⏰ Time to close: {s['name']}", f"Your plan exits {s['ticker']} by {s['time_exit']} · {pnl_txt}"))
+        inv, px = s.get("invalidation") or {}, m.get("price")
+        if px and not fired.get("invalid"):
+            if inv.get("below") and px <= inv["below"]:
+                hits.append(("invalid", f"⚠️ Plan invalidated: {s['name']}", f"{s['ticker']} at ${px:,.2f}, below ${inv['below']:,.2f} · {pnl_txt}"))
+            elif inv.get("above") and px >= inv["above"]:
+                hits.append(("invalid", f"⚠️ Plan invalidated: {s['name']}", f"{s['ticker']} at ${px:,.2f}, above ${inv['above']:,.2f} · {pnl_txt}"))
         out = []
         for kind, title, msg in hits:
             ev = {"event_id": f"evt_{uuid.uuid4().hex[:12]}", "user_id": s["user_id"], "key": f"{s['strategy_id']}|{kind}",
@@ -213,6 +238,7 @@ def register(api_router, *, db, get_user: Callable, get_quote: Callable, send_pu
                   "pnl": m["pnl"], "title": title, "message": msg, "created_at": datetime.now(timezone.utc), "read": False}
             await db.alert_events.insert_one(ev)
             await db.strategies.update_one({"strategy_id": s["strategy_id"]}, {"$set": {f"fired.{kind}": True}})
+            s.setdefault("fired", {})[kind] = True
             ev.pop("_id", None)
             out.append(ev)
             try:
@@ -226,7 +252,7 @@ def register(api_router, *, db, get_user: Callable, get_quote: Callable, send_pu
         while True:
             try:
                 if market_open_now():
-                    rows = await db.strategies.find({"status": "open", "$or": [{"target": {"$ne": None}}, {"stop": {"$ne": None}}]},
+                    rows = await db.strategies.find({"status": "open", "$or": [{k: {"$ne": None}} for k in ("target", "stop", "time_exit", "invalidation")]},
                                                     {"_id": 0}).to_list(2000)
                     async with httpx.AsyncClient() as client:
                         for s in rows:
@@ -262,6 +288,7 @@ def register(api_router, *, db, get_user: Callable, get_quote: Callable, send_pu
             "expiration": min(l["expiration"] for l in legs if l["type"] != "Stock"),
             "target": req.target.model_dump() if req.target else None, "stop": req.stop.model_dump() if req.stop else None,
             "strategy_type": req.strategy_type or classify([l.model_dump() for l in req.legs]),
+            "time_exit": req.time_exit, "invalidation": req.invalidation.model_dump() if req.invalidation else None, "source": req.source,
             "fired": {}, "status": "open", "realized_pnl": 0.0, "rolls": [], "history": {},
             "created_at": datetime.now(timezone.utc),
         }

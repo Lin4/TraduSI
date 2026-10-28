@@ -11,8 +11,10 @@ import { RollSheet } from "./RollSheet";
 import { ThresholdField, toThreshold, Thr } from "./SaveStrategy";
 import { colors, spacing, radius, themedStyles, useTheme } from "./theme";
 
-const thrText = (t: any, usd: number | null) =>
-  t ? `${t.mode === "pct" ? `${t.value}%` : `$${t.value}`}${usd != null && t.mode === "pct" ? ` ($${Math.round(usd)})` : ""}` : "—";
+const usd = (v: number) => `$${Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+const thrText = (t: any, val: number | null) =>
+  t ? `${t.mode === "pct" ? `${t.value}%` : usd(t.value)}${val != null && t.mode === "pct" ? ` (${usd(Math.round(val))})` : ""}` : "—";
+const shortDate = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 
 /** Saved strategies with live P&L, progress between stop and target, inline edit/delete. */
 export function StrategiesList({ items, total, onChanged }: { items: any[]; total: number; onChanged: () => void }) {
@@ -74,6 +76,11 @@ function StrategyCard({ it, onChanged }: { it: any; onChanged: () => void }) {
           <View style={{ flex: 1 }}>
             <Text style={s.name} numberOfLines={1}>{it.name}</Text>
             <Text style={s.sub}>{it.ticker} · {it.legs.length} legs · exp {it.expiration}{it.multi_expiry ? " (multi)" : ""}</Text>
+            {it.source === "trade_plan" ? (
+              <Text testID={`strategy-plan-${it.strategy_id}`} style={s.sub}>
+                Trade plan{it.time_exit ? ` · close by ${shortDate(it.time_exit)}` : ""}{it.invalidation?.below ? ` · invalid below $${it.invalidation.below}` : ""}{it.invalidation?.above ? ` · invalid above $${it.invalidation.above}` : ""}
+              </Text>
+            ) : null}
           </View>
           <View style={{ alignItems: "flex-end" }}>
             <Text testID={`strategy-pnl-${it.strategy_id}`} style={[s.pnl, { color: up ? colors.success : colors.error }]}>{m.error ? "—" : money(pnl)}</Text>
@@ -89,6 +96,8 @@ function StrategyCard({ it, onChanged }: { it: any; onChanged: () => void }) {
           <View style={{ flexDirection: "row", gap: 6 }}>
             {it.fired?.target ? <Badge text="Target hit" kind="success" /> : null}
             {it.fired?.stop ? <Badge text="Stop hit" kind="error" /> : null}
+            {it.fired?.invalid ? <Badge text="Invalidated" kind="warn" /> : null}
+            {it.fired?.time ? <Badge text="Time to close" kind="warn" /> : null}
             {m.live === false ? <Badge text="Model mark" kind="warn" /> : null}
           </View>
           <Text style={[s.small, { color: colors.success }]}>Target {thrText(it.target, m.target_usd)}</Text>

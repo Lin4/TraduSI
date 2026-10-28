@@ -20,6 +20,7 @@ import { money } from "@/src/quantcharts";
 import { AskAIButton } from "@/src/ChatParts";
 import { ValuationBoard } from "@/src/ValuationBoard";
 import { BuyLevelsChart } from "@/src/BuyLevelsChart";
+import { TrackPlanButton, StockPlanAlerts } from "@/src/TrackPlan";
 
 const STRATS = ["auto", "Cash Secured Put", "Covered Call", "Bull Put Spread", "Bear Call Spread", "Iron Condor", "Bull Call Spread", "Bear Put Spread", "Long Call Butterfly", "Long Call", "Long Put", "Long Straddle", "Long Strangle", "Sell Put", "Sell Call", "Short Strangle"];
 
@@ -288,6 +289,7 @@ function OptionsLab({ r }: { r: any }) {
       <PipelineStrip r={r} />
       <OptiScoreCard r={r} />
       <PlanCard plan={r.plan} pop={r.pop_calibrated ?? r.pop} />
+      <TrackPlanButton r={r} />
       <ValidationCard v={r.validation} pop={r.pop} />
       <ScanCard scan={r.scan} />
       <AskAIButton testID="analyze-ask-ai" ticker={r.ticker} label={`Ask AI about this ${r.ticker} ${r.strategy}`}
@@ -439,6 +441,7 @@ function TradePlan({ r }: { r: any }) {
       </View>
       <MetricRow label="Reward : risk" value={`${p.reward_risk}:1`} />
       <MetricRow label="ATR (14)" value={`$${p.atr}`} />
+      <StockPlanAlerts r={r} />
       {p.entry_trigger ? (
         <View testID="stock-trigger" style={styles.triggerBox}>
           <View style={styles.triggerRow}>

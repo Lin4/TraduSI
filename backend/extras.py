@@ -131,6 +131,45 @@ def calibrate(pop: float) -> Optional[tuple]:
     return None
 
 
+def weekly_report(rows: List[Dict], open_rows: List[Dict], weeks: int = 8) -> Dict[str, Any]:
+    """Settled picks grouped by settlement week (Mon-Fri): real win rate vs the POP shown at the time
+    (calibrated when calibration was on for that pick, else the model POP)."""
+    by: Dict[str, List[Dict]] = {}
+    for r in rows:
+        if not r.get("exit_date"):
+            continue
+        d = date.fromisoformat(r["exit_date"])
+        by.setdefault((d - timedelta(days=d.weekday())).isoformat(), []).append(r)
+    out = []
+    for wk in sorted(by, reverse=True)[:weeks]:
+        sub = by[wk]
+        n, wins = len(sub), sum(1 for r in sub if r["won"])
+        shown = [r["pop_calibrated"] if r.get("pop_calibrated") is not None else r["pop"] for r in sub]
+        real, cal, model = wins / n * 100, sum(shown) / n, sum(r["pop"] for r in sub) / n
+        out.append({"week_of": wk, "week_end": (date.fromisoformat(wk) + timedelta(days=4)).isoformat(), "n": n, "wins": wins,
+                    "in_progress": (date.fromisoformat(wk) + timedelta(days=4)) >= date.today(),
+                    "realized": round(real, 1), "calibrated_pop": round(cal, 1), "model_pop": round(model, 1),
+                    "calibrated_n": sum(1 for r in sub if r.get("pop_calibrated") is not None),
+                    "gap": round(real - cal, 1), "gap_model": round(real - model, 1),
+                    "brier": round(sum((p / 100 - (1 if r["won"] else 0)) ** 2 for p, r in zip(shown, sub)) / n, 3),
+                    "pnl": round(sum(r["pnl"] for r in sub), 2)})
+    soon = (date.today() + timedelta(days=7)).isoformat()
+    summary = None
+    if out:
+        w = out[0]
+        verdict = "on target" if abs(w["gap"]) <= 5 else "better than forecast" if w["gap"] > 0 else "worse than forecast"
+        summary = (f"{w['n']} pick{'s' if w['n'] != 1 else ''} settled: {w['realized']:.0f}% won vs {w['calibrated_pop']:.0f}% forecast "
+                   f"({'+' if w['gap'] >= 0 else ''}{w['gap']:.1f} pts, {verdict}).")
+        if len(out) > 1:
+            prev = out[1]
+            summary += (" Closer to the forecast than the week before." if abs(w["gap"]) < abs(prev["gap"]) - 0.5 else
+                        " Further from the forecast than the week before." if abs(w["gap"]) > abs(prev["gap"]) + 0.5 else
+                        " About as close as the week before.")
+    return {"weeks": out, "summary": summary, "settling_next_7d": sum(1 for r in open_rows if r.get("expiration", "") <= soon),
+            "note": "Forecast = the POP shown when the pick was made: calibrated POP once its bucket has 30+ real results, "
+                    "otherwise the model POP. Brier: 0 = perfect, 0.25 = coin flip."}
+
+
 def _buckets(rows: List[Dict]) -> List[Dict]:
     out = []
     for lo, hi in ((70, 80), (80, 90), (90, 101)):
@@ -263,7 +302,8 @@ def register(api_router, *, db, get_user: Callable, user_defaults: Callable, sca
                 "pick_id": f"pick_{uuid.uuid4().hex[:12]}", "key": key, "ticker": r["ticker"], "strategy": r["strategy"],
                 "legs": [{k: l[k] for k in ("action", "type", "strike", "qty")} for l in r["legs"]],
                 "premium_net": r["premium_net"], "fees": r["pricing"]["fees"], "entry_price": r["price"],
-                "pop": r["pop"], "max_profit": r["max_profit"], "max_loss": r["max_loss"], "profile": profile,
+                "pop": r["pop"], "pop_calibrated": r.get("pop_calibrated"),
+                "max_profit": r["max_profit"], "max_loss": r["max_loss"], "profile": profile,
                 "expiration": r["expiration"], "dte": r["expiration_days"], "status": "open",
                 "created_at": datetime.now(timezone.utc),
             }
@@ -323,6 +363,7 @@ def register(api_router, *, db, get_user: Callable, user_defaults: Callable, sca
         await get_user(authorization)
         settled = await db.picks.find({"status": "settled"}, {"_id": 0, "key": 0}).sort("settled_at", -1).to_list(500)
         open_rows = await db.picks.find({"status": "open"}, {"_id": 0, "key": 0}).sort("created_at", -1).to_list(50)
+        weekly = weekly_report(settled, await db.picks.find({"status": "open"}, {"_id": 0, "expiration": 1}).to_list(5000))
         for r in settled + open_rows:
             for k in ("created_at", "settled_at"):
                 if isinstance(r.get(k), datetime):
@@ -336,7 +377,7 @@ def register(api_router, *, db, get_user: Callable, user_defaults: Callable, sca
                                                  for b in _CALIB.values()],
                                      "progress": [{"range": f"{lo}–{min(hi, 100)}%", "n": sum(1 for r in settled if lo <= r["pop"] < hi)}
                                                   for lo, hi in CAL_BUCKETS]},
-                     "open": open_rows, "open_count": open_count,
+                     "open": open_rows, "open_count": open_count, "weekly": weekly,
                      "method": "Every pick shown on Discover is logged with its exact strikes and premium, then settled at the real closing price on expiration day. Losses included."},
             "backtest": _BACKTEST,
         }

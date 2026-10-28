@@ -161,3 +161,16 @@
 
 ## Iteration 34 (main agent) - Ask AI cut-off answers
 - Verified by curl: quick long answer completes (done event). Deep stream cut at exactly 60s by the proxy; server kept generating, GET /api/assistant/messages/{id} returned status done 10,374 chars. UI (web): deep question -> full 9,289-char answer, no error.
+
+## Iteration 35 (main agent) - OptiIQ Value v5 (revenue-driven DCF per user's template)
+- See PRD "OptiIQ Value v5". Verified: MU long-term analysis -> optiiq value 1695.91 (+72.5%), card unchanged; PLTR -> low confidence (no intrinsic line); board refreshing docs to model_v 5.
+- Old tests test_iter29/30 assert v4 fields (growth.stage1/stage2/long_term, mid-year discount) - obsolete now.
+- needs_retesting: true
+
+## Iteration 36 (main agent) - OptiIQ input fixes + One-tap trade plan + Weekly calibration report + Discover sort/filter + OptiScore breakdown
+- OptiIQ (engine.optiiq_value): Year-1 growth = avg(consensus coming quarters vs same quarters a year ago, latest reported quarter vs a year ago) -- seasonal run-rate removed. Capex now eases toward the company's own median capex/revenue over up to 10 fiscal years of 10-K filings (market.get_capex_history, filled from the annual call get_quarterly_financials already makes; company-specific tags e.g. nvda_PurchasesOfPropertyAndEquipment...). <3 years -> old 1.1x D&A rule. reinvestment.capex_rule / capex_history in output. valuation_board MODEL_V=7 (board refreshes over a few hours; docs store capex_history). Unit tests tests/test_iter32_optiiq_dcf_unit.py updated (18 pass).
+- One-tap trade plan: POST /api/strategies accepts time_exit (YYYY-MM-DD), invalidation {below, above}, source "trade_plan"; check_hits fires strategy_time / strategy_invalid events (+ push) besides target/stop. New POST /api/alerts/plan {ticker, direction long|short, target, stop, label} -> two linked price alerts (group_id); server-side alert-limit check (403); when one fires the sibling is closed (closed_by). Frontend src/TrackPlan.tsx: TrackPlanButton (Analyze > Options Lab under Trade plan, testID track-plan-btn) and StockPlanAlerts (Day/Swing trade plan, testID stock-plan-alerts-btn).
+- Weekly calibration report: GET /api/track-record live.weekly {weeks[{week_of, week_end, n, wins, realized, calibrated_pop, model_pop, calibrated_n, gap, gap_model, brier, pnl}], summary, settling_next_7d, note}; picks now store pop_calibrated. Frontend src/WeeklyReport.tsx in Track record > Live picks (testID weekly-report).
+- OptiScore breakdown: engine.score_drivers -> idea.drivers {pillar: [{label, pts, note}]} (50 + sum(pts) = pillar score), idea.score_weights. Frontend src/ScoreBreakdown.tsx: tap a pillar in the OptiScore card (testID pillar-<k>-toggle) to see drivers.
+- Discover sort/filter: src/ResultSort.tsx toolbar above results (sort-optiscore/history/cost/pop, min-score-0/50/65/80, filter-low-cost, filter-clear), saved in AsyncStorage; cost badge on cards.
+- needs_retesting: true

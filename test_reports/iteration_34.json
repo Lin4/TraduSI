@@ -1,0 +1,40 @@
+{
+  "summary": "Iteration 34: OptiIQ seasonal growth/capex, OptiScore drivers, one-tap plan alerts, strategy time_exit/invalidation, weekly calibration report, Discover sort/filter. Backend 16/17 pass (pytest /app/backend/tests/test_iter34_plans_drivers_weekly.py). AAPL OptiIQ dcf returns only the same-quarter growth labels ('Consensus, coming quarters vs a year ago', 'Latest quarter vs a year ago'), no run-rate labels. capex_rule is 'Moves toward its own 10-year median (2016-2025 10-K filings)' and capex_history has 10 {year, pct} rows. For every pillar, 50 + sum(driver pts) is within 0.1 of the pillar score; score_weights is present. /alerts/plan creates 2 alerts with the same group_id and the right notes and kinds for long and short plans. Long plans with stop >= target return 422. The 403 limit check works: a fresh trial account with 19/20 alerts gets 403, and at 18/20 the plan is allowed. Strategies: an invalid time_exit or source returns 422. A past time_exit plus invalidation.below above the price fires strategy_time and strategy_invalid in the feed, fired.time and fired.invalid are true in the same GET, and nothing fires twice. Weekly report: 2 weeks (2026-10-19: 41 picks, 2026-10-26: 5 picks) = 46 settled; week_of is a Monday, week_end = Mon+4, gap = realized - calibrated_pop. ONE BACKEND BUG: a short plan with stop == target is accepted (200) and should be 422. Frontend all passed: Options Lab AAPL track-plan saved the strategy, the button changed to 'Tracking · open Portfolio' and opened Portfolio, which shows strategy-plan-<id> 'Trade plan · close by 2026-11-20 · invalid below $315'. Swing AAPL stock-plan-alerts showed the toast 'Target & stop alerts set'; the Alerts tab lists 'Swing plan target' / 'Swing plan stop'. The OptiScore hint is shown, pillar-risk-toggle expands and collapses the drivers with a total row. Discover scan of 5: all 4 sorts reorder correctly, min-score and low-cost filters, filter-clear, 'Showing X of Y' and disc-cost badges work, and the sort is still applied after a reload. The Track record weekly report renders the summary, 4 stats and week rows. Regression: Long-term OptiIQ card, buy levels chart and valuation board, and the Alerts feed all render. No deprecated Expo packages were checked or found in the files touched.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/alerts/plan", "issue": "A short plan with stop == target (e.g. target 300, stop 300) returns 200 and creates 2 alerts. It should be 422, since a short plan needs stop > target. The PlanAlertsReq._sides check `(direction=='long') != (stop < target)` only rejects equal values for long plans. Reference: /app/backend/server.py:1011"},
+      {"endpoint": "POST /api/alerts/plan", "issue": "No duplicate check: tapping again after a reload (frontend 'saved' state is local) creates another pair with a new group_id."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Track record > Weekly calibration report", "issues": ["Gap '+25.6 pts' is shown in red even though the summary says 'better than forecast'. The colour follows the size of the miscalibration, which reads as a loss. Consider a neutral or labelled colour.", "Stat labels 'FORECAST (MODEL POP)' and 'GAP +25.6 pts' wrap onto 2 lines at 375px, so the 4 stat boxes are uneven.", "The current week (Oct 26–Oct 30) is labelled as a full week while it is still in progress (today is Oct 28). Consider 'so far'."]},
+      {"screen": "Portfolio strategy card (trade_plan source)", "issues": ["The plan line shows the raw ISO date 'close by 2026-11-20'; the TrackPlan card uses 'Nov 20'.", "USD thresholds are shown as 'Stop $2347.8 / Target $577.2' (no thousands separator, 1 decimal) while other cards show 'Stop 50% ($371)'."]},
+      {"screen": "OptiScore breakdown", "issues": ["Driver pts use toFixed(0), so values between -0.5 and 0.5 show '−0' / '+0' in red or green."]},
+      {"screen": "TrackPlan toast", "issues": ["The toast always says 'Plan saved with 4 alerts', even when there is no invalidation level or when the target or stop is null."]}
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_iter34_plans_drivers_weekly.py", "/app/test_reports/pytest/iter34_a.xml", "/app/test_reports/pytest/iter34_b.xml"],
+  "action_items": [
+    "Fix PlanAlertsReq._sides (server.py:1011) so stop == target is rejected for both directions, e.g. `if (long and stop >= target) or (not long and stop <= target): raise`.",
+    "Optional: show the new capex_rule / capex_history in the OptiIQ card. The frontend never reads these fields (grep finds no usage), so users can't see that capex is now based on the company's own history.",
+    "Optional: remove the stale 'run-rate' wording in the engine.py:1217-1218 comment.",
+    "Optional design: the weekly gap colour/wording, the date format on the Portfolio plan line, the USD threshold format and the '4 alerts' toast text."
+  ],
+  "critical_code_review_comments": [
+    "engine.py is 1346 lines and server.py 1425 lines, both over the 700-line guideline.",
+    "score_drivers 'Chance of profit' note uses the model pop (i['pop']), while Discover shows the calibrated POP when it is available, so the two can differ.",
+    "ResultSort: the sort is persisted correctly in AsyncStorage (the key is discover_result_view). The result-filter-empty state could not be reached with live data (the top pick, PLTR 82, had low costs), so only the code path was reviewed.",
+    "The trader@optiscreen.app credential in test_credentials.md does not exist in the shared Atlas DB (login returns 401). The 403 limit test therefore uses a temporary delivered+t34*@resend.dev trial account, which is deleted afterwards."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter34_plans_drivers_weekly.py"],
+  "success_rate": {"backend": "94% (16/17)", "frontend": "100% (9/9 flows; filter-empty state not reachable with live data)"},
+  "seed_data_creation": "None kept. Temporary trial user plus 19 alerts (deleted), 1 TEST_plan strategy plus 2 events (deleted), 1 AAPL Cash Secured Put strategy from the UI (deleted), 2 AAPL swing alerts (deleted). Admin left with its original 2 strategies and 4 ADSK alerts.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run pytest with -n 0 -s. The backend uses SHARED_MONGO_URL + SHARED_MONGO_USER/PASSWORD through atlas.shared_mongo_url; the helper _shared_db() in test_iter34 handles this. Frontend env var is EXPO_PUBLIC_BACKEND_URL. trader@optiscreen.app doesn't exist in Atlas; use lingesa4@gmail.com (expert, unlimited alerts; it has 4 ADSK alerts and 2 strategies, NVDA and AVGO, that you must not delete). Discover scan of 5 takes ~30s; Options Lab AAPL ~20s."
+}

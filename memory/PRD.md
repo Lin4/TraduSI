@@ -239,3 +239,22 @@ Research-first, transparent, trust-driven AI intelligence platform. AI acts as a
 - assistant.py: max_tokens quick 6000 (Sonnet 5.5) / deep 16000 (Opus 5.5) as requested, plus extra_body output_config.effort = low (quick) / medium (deep). Root cause 1: hidden reasoning tokens consumed max_tokens (probe: 700/700 reasoning, 0 text).
 - Root cause 2: the preview/ingress closes any HTTP response after 60s, so long deep streams were cut mid-sentence and the answer was lost. Now generation runs in a background asyncio task that saves the partial answer every 2s to ai_messages (status streaming/done/failed); SSE meta includes message_id; new GET /api/assistant/messages/{id}; app/assistant.tsx follows up by polling every 2s when the stream ends without done/error.
 - If Claude still hits max_tokens, the answer ends with a note to ask "continue".
+
+## Update (Jun 2026) - OptiIQ Value v5: company-specific revenue-driven DCF (user's Company_Specific_DCF_Valuation_Template.xlsx)
+- engine.optiiq_value(price, metrics, financials, sector, ticker, estimates): 10-year FCFF DCF.
+  - Year-1 revenue growth = avg(consensus coming quarters vs same fiscal quarters a year ago, consensus run-rate x4 vs TTM); no consensus -> avg(TTM YoY, latest-quarter run-rate vs TTM). Clamp -15%..80%.
+  - g_t = 3.5% + (g1 - 3.5%)(1 - fade)^(t-1); fade = 0.2 + 0.5*max(0, g1 - 15%), max 0.45.
+  - EBIT margin before stock-based pay (reported + SBC/revenue) -> stable = max(avg(m0, 5y avg + SBC), 0.6*m0) at the same fade. Not positive -> unavailable.
+  - FCFF = EBIT(1-21%) + D&A - capex - dNWC; D&A = max(SEC tag, EBITDA-EBIT); capex (standardized TTM) converges toward 1.1x D&A when above it; NWC% = (receivables + inventory - payables - deferred revenue)/revenue, 0-30%.
+  - WACC unchanged (CAPM Blume beta, MRP 6%, rf 4.5%, debt weights, floors). End-of-year discounting; TV = FCFF10 x 1.035/(WACC-3.5%). Equity = EV + cash - debt; / shares.
+  - Scenarios bear (g1-8pt, WACC+1.5pt) / bull (g1+5pt, WACC-0.5pt). Banks/insurers/utilities keep the excess-return model. low-confidence flag unchanged.
+- market.py: new SEC tags (operating_income, dep_amort, sbc, receivables, inventory, payables, deferred_revenue, company-specific MarketableSecurities fallback); metrics: operating margins TTM/annual/5y, revenue_growth_q_yoy, revenue_ps_ttm, ebitda_ps_ttm; get_earnings: soonest upcoming date (fixes wrong next-earnings date) + "estimates" [{year, quarter, date, revenue_estimate}].
+- valuation_board: stores FIN_FIELDS + estimates + model_v=5; docs on older model are refreshed first and skipped by the price loop until refreshed (~1-1.5h for 503 names at the Finnhub cap).
+- UI unchanged (OptiIQ card = value + % vs price). AI thesis brief describes the new inputs. scripts/optiiq_calibrate.py prints the inputs per ticker.
+
+## Update (Jun 2026) - OptiIQ check vs Excel template + one-tap plans + weekly calibration + sort/filter + score breakdown
+- OptiIQ verified against Company_Specific_DCF_Valuation_Template.xlsx: same inputs -> same value within $0.25 (10 large caps). User decisions: keep risk-based WACC (CAPM, MRP 6%); Year-1 growth = avg(consensus coming quarters vs same quarters a year ago, latest quarter vs a year ago) -- seasonal run-rate removed; capex eases toward the company's own median capex/revenue (up to 10 fiscal years of 10-K filings, market.get_capex_history), <3 years -> 1.1x D&A rule. valuation_board MODEL_V=7 (stores capex_history).
+- One-tap trade plan: Options Lab "Track this plan in one tap" -> saved strategy with take-profit, stop, invalidation level and time-exit alerts (strategy_time / strategy_invalid events). Day/Swing "Alert me at the target and stop" -> POST /api/alerts/plan: two linked price alerts (group_id; one firing closes the other; duplicate tap returns the existing pair; server-side alert limit).
+- Track record: weekly calibration report (live.weekly), picks store pop_calibrated.
+- Discover: sort (OptiScore / history win rate / lowest trading cost / chance of profit) + filters (min score, low cost only), saved on device; cost badge on cards.
+- OptiScore breakdown: idea.drivers per pillar (points vs neutral 50, add up to the pillar), tap a pillar in the OptiScore card.

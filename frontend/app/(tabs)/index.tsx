@@ -18,6 +18,7 @@ import { OptiScorePill } from "@/src/quality";
 import { money } from "@/src/quantcharts";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Filters, ProfileId, PROFILE_INFO, defaultFilters, filtersPayload, FilterPanel, ProfilePicker, Label, accountLabel } from "@/src/screen";
+import { ResultToolbar, ResultView, DEFAULT_VIEW, VIEW_KEY, applyView } from "@/src/ResultSort";
 
 type Mode = "find" | "best";
 const EXPIRATION = ["daily", "week", "month", "3months"];
@@ -53,6 +54,9 @@ function Discover() {
   const [levelLabel, setLevelLabel] = useState("");
   const plan = usePlan();
   const [scansToday, setScansToday] = useState(0);
+  const [view, setView] = useState<ResultView>(DEFAULT_VIEW);
+  const changeView = (v: ResultView) => { setView(v); AsyncStorage.setItem(VIEW_KEY, JSON.stringify(v)).catch(() => {}); };
+  const shown = applyView(results, view);
   const scanLimit = plan.features.scans_per_day;
   // by features, not tier rank: the Free trial ranks below Advance but includes everything in it
   const tierLocked: Record<string, boolean> = { low_high: plan.features.strategy_tier < 3, high_high: plan.features.strategy_tier < 4 };
@@ -67,6 +71,7 @@ function Discover() {
     }).catch(() => {});
     AsyncStorage.getItem("pendingUpgrade").then((v) => { if (v) { AsyncStorage.removeItem("pendingUpgrade"); router.push("/upgrade" as any); } }).catch(() => {});
     api("/api/billing/status").then((b) => setScansToday(b.scans_today || 0)).catch(() => {});
+    AsyncStorage.getItem(VIEW_KEY).then((v) => { if (v) setView({ ...DEFAULT_VIEW, ...JSON.parse(v) }); }).catch(() => {});
   }, []);
 
   const toggleSector = (s: string) => setSectors((c) => c.includes(s) ? c.filter((x) => x !== s) : [...c, s]);
@@ -200,8 +205,17 @@ function Discover() {
 
         {loading && !results.length && <LoadingSkeleton lines={6} />}
 
-        {results.map((r, i) => (
-          <Pressable key={i} testID={`disc-result-${r.ticker}`} onPress={() => router.push({ pathname: "/(tabs)/analyze", params: { ticker: r.ticker, strategy: r.strategy, range: r.expiration_days > 45 ? "3months" : r.expiration_days > 10 ? "month" : "week" } } as any)} style={styles.resultCard}>
+        {results.length > 1 ? <ResultToolbar view={view} onChange={changeView} shown={shown.length} total={results.length} /> : null}
+        {results.length && !shown.length ? (
+          <View testID="result-filter-empty" style={styles.empty}>
+            <Icon name="sliders" size={20} color={colors.muted} />
+            <Text style={styles.emptyText}>None of the {results.length} ideas match these filters.</Text>
+            <Button testID="result-filter-reset" label="Show all ideas" variant="ghost" onPress={() => changeView({ ...view, minScore: 0, lowCost: false })} />
+          </View>
+        ) : null}
+
+        {shown.map((r) => (
+          <Pressable key={`${r.ticker}-${r.strategy}-${r.expiration}`} testID={`disc-result-${r.ticker}`} onPress={() => router.push({ pathname: "/(tabs)/analyze", params: { ticker: r.ticker, strategy: r.strategy, range: r.expiration_days > 45 ? "3months" : r.expiration_days > 10 ? "month" : "week" } } as any)} style={styles.resultCard}>
             <View style={styles.strategyStripe} />
             <View style={styles.resultTop}>
               <View style={{ flex: 1 }}>
@@ -229,6 +243,7 @@ function Discover() {
               <Badge text={`Liquidity ${r.liquidity?.grade || "—"}${r.liquidity?.estimated ? " (est.)" : ""}`} kind={r.liquidity?.grade === "High" ? "success" : r.liquidity?.grade === "Low" ? "error" : "info"} />
               <Badge text={`IV rank ${Math.round(r.scan?.volatility?.iv_rank ?? r.volatility?.iv_rank ?? 0)}`} kind="info" />
               {r.validation?.backtest?.hold_to_expiry?.trades ? <Badge text={`History ${r.validation.backtest.hold_to_expiry.win_rate}% won`} kind={r.validation.backtest.hold_to_expiry.win_rate >= r.pop - 10 ? "success" : "warn"} /> : null}
+              {r.validation?.costs?.grade ? <Badge testID={`disc-cost-${r.ticker}`} text={`Costs ${r.validation.costs.grade.toLowerCase()}`} kind={r.validation.costs.grade === "Low" ? "success" : r.validation.costs.grade === "High" ? "error" : "info"} /> : null}
               <Badge text={`${r.expiration_days}d`} kind="info" />
               {r.events?.earnings_in_window ? <Badge text="Earnings in window" kind="warn" /> : null}
             </View>

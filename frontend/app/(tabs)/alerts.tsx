@@ -19,6 +19,11 @@ const KINDS = [
   { id: "smart_setup", label: "New 70%+ setups", icon: "zap" },
 ];
 const PROFILE_OPTS = [{ id: "low_low", label: "Low risk" }, { id: "low_high", label: "Higher reward" }, { id: "high_high", label: "High risk" }];
+const EVENT_ICON: Record<string, [string, "success" | "error" | "warning" | "brandPrimary"]> = {
+  price_below: ["trending-down", "brandPrimary"], price_above: ["trending-up", "brandPrimary"],
+  strategy_target: ["target", "success"], strategy_stop: ["shield", "error"],
+  strategy_time: ["clock", "warning"], strategy_invalid: ["alert-octagon", "warning"],
+};
 
 /** After the trial ends saved alerts and the alert history stay visible; creating new alerts needs a plan. */
 export default function Alerts() {
@@ -110,7 +115,7 @@ export default function Alerts() {
               const priceEvt = e.kind === "price_below" || e.kind === "price_above";
               return (
               <Pressable key={e.event_id} testID={`feed-${e.event_id}`} onPress={() => priceEvt ? router.push(`/ticker/${e.ticker}` as any) : e.kind?.startsWith("strategy_") ? router.push("/(tabs)/portfolio" as any) : router.push({ pathname: "/(tabs)/analyze", params: { ticker: e.ticker, strategy: e.strategy, range: e.expiration_days > 45 ? "3months" : e.expiration_days > 10 ? "month" : "week" } } as any)} style={styles.feedRow}>
-                <View style={styles.iconWrap}><Icon name={e.kind === "price_below" ? "trending-down" : e.kind === "price_above" ? "trending-up" : e.kind === "strategy_target" ? "target" : e.kind === "strategy_stop" ? "shield" : "zap"} size={16} color={e.kind === "strategy_stop" ? colors.error : e.kind === "strategy_target" ? colors.success : colors.brandPrimary} /></View>
+                <View style={styles.iconWrap}><Icon name={(EVENT_ICON[e.kind]?.[0] || "zap") as any} size={16} color={colors[EVENT_ICON[e.kind]?.[1] || "brandPrimary"]} /></View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.rowTicker}>{e.title}</Text>
                   <Text style={styles.rowDesc}>{e.message} · {new Date(e.created_at).toLocaleString()}</Text>
@@ -130,10 +135,10 @@ export default function Alerts() {
             <View style={{ flex: 1 }}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                 <Text style={styles.rowTicker}>{it.ticker}</Text>
-                <Badge text={it.triggered_at ? "triggered" : it.active ? "active" : "paused"} kind={it.triggered_at ? "warn" : it.active ? "success" : "info"} />
+                <Badge text={it.triggered_at ? "triggered" : it.closed_by ? "closed" : it.active ? "active" : "paused"} kind={it.triggered_at ? "warn" : it.active ? "success" : "info"} />
               </View>
               <Text style={styles.rowDesc}>
-                {it.kind === "earnings" ? "Earnings approaching reminder" : it.kind === "smart_setup" ? `New 70%+ setups · ${PROFILE_OPTS.find((p) => p.id === it.note)?.label || "Low risk"}` : `${it.note ? `${it.note} · ` : ""}${it.kind.replace("_", " ")} $${it.threshold}${it.triggered_price ? ` · hit $${it.triggered_price}` : ""}`}
+                {it.kind === "earnings" ? "Earnings approaching reminder" : it.kind === "smart_setup" ? `New 70%+ setups · ${PROFILE_OPTS.find((p) => p.id === it.note)?.label || "Low risk"}` : `${it.note ? `${it.note} · ` : ""}${it.kind.replace("_", " ")} $${it.threshold}${it.triggered_price ? ` · hit $${it.triggered_price}` : ""}${it.closed_by ? " · other side of the plan hit" : ""}`}
               </Text>
             </View>
             <Pressable testID={`alert-remove-${it.alert_id}`} onPress={() => remove(it.alert_id)} style={styles.removeBtn}>

@@ -1,0 +1,43 @@
+{
+  "summary": "Tested the OptiIQ revenue-driven 10-year DCF (v5). Unit tests: 12/12 pass. I rebuilt the template math independently and it matches: growth fade g_t, the margin path, FCFF, end-of-year discounting, terminal value, the per-share bridge, the Year-1 growth rules (consensus YoY + run-rate, the no-consensus fallback, the -15%..80% clamp and the fade formula), and the edge cases (negative margin, bank/utility excess-return model, more than 10x price -> unavailable, low-confidence flag, non-consecutive quarters -> revenue_ps fallback). API tests: 7/7 pass (MU, NVDA, PLTR, MSFT long analysis, the JPM bank model, the Finnhub estimates and extended financials fields, and the valuation board). Once all inputs were fetched (warm cache), the live values matched the calibration: MU $1695.91 (+72.5%), NVDA $186.72 (-13.3%), PLTR $27.89 (low confidence, intrinsic_line hidden), MSFT $333.31 (-37.2%). Frontend: the Analyze -> Long-term -> MU OptiIQ card shows $1695.91 / +72.5% vs price, laid out as before. The scenario editor (dcf-bull/base/bear/recalc) and buy levels render. Main issue: the value depends on cache state. When the Finnhub per-minute call limit is used up, the endpoint falls back to stored board financials. 488 of 503 of those docs are still pre-v5, with no fiscal_year, operating_income, sbc or estimates, so the same ticker gets a very different value on the first call.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "POST /api/screener/stock-analysis (purpose=long)", "issue": "The OptiIQ value is not deterministic. On a cold or rate-limited call, get_quarterly_financials returns [] and server.py:798-801 falls back to valuation_board.financials. For docs that are not yet model_v 5 (488/503), those rows have no fiscal_year/fiscal_quarter/operating_income/sbc/dep_amort, so consensus YoY can't match and the SBC add-back is lost. Observed first call vs second call: MSFT $277.40 vs $333.31; PLTR $19.51 vs $27.89; TSLA $13.71 vs $29.26 (growth 1.2% vs 16.2%); CRWD 'Not enough positive earnings' (unavailable) vs $21.26. The first-call responses had financials=[] (nfin 0).", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "valuation_board refresh_fundamentals", "issue": "The first ~15 docs written as model_v=5 (A, ABBV, ABT, ADBE, AMD, AOS, APD, MMM, ...) were saved before SBC parsing worked. Every stored row has sbc=None, but a live get_quarterly_financials('AMD') now returns sbc ~$0.35-0.5B per quarter. These docs keep the wrong margin (no stock-pay add-back) until FUND_TTL (24h) expires, because the loop treats them as current v5."},
+      {"endpoint": "valuation board refresh rate", "issue": "Observed about 1 doc per minute moving to v5 during testing (18 v5 docs at about 20 minutes after the reload). That projects to many hours for all 503. uvicorn --reload also restarts the loop (45s delay) whenever any backend file changes, including tests/*.py."},
+      {"endpoint": "engine.optiiq_value", "issue": "A single-quarter impairment makes the DCF unavailable. APD Q3 FY26 operating income is -$2.1B, so the TTM margin is -4.7% even though the 5-year margin is 18%, and the result is 'Operating margin isn't positive yet'. Consider using the 5-year/history margin, or excluding impairments, when TTM is negative but history is solidly positive."},
+      {"endpoint": "engine.optiiq_value scenarios", "issue": "The bear/bull WACC floor (TERMINAL_GROWTH+0.03 = 6.5%) differs from the base floor (max(6.0%, 7%) = 7%). Minor inconsistency."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Analyze Long-term MU buy-levels chart", "issues": ["The chart legend 'Price $928.76' (last daily close) disagrees with the live analysis price (~$983, used for +72.5% and the B1 '-1.2% from price'). Users may be confused.", "The $1695.91 intrinsic line compresses the price series into the lower half of the chart (cosmetic)."]}
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_iter32_optiiq_dcf_unit.py", "/app/backend/tests/test_iter32_optiiq_dcf_api.py", "/app/test_reports/pytest/iter32_api.xml"],
+  "action_items": [
+    "HIGH: Make the long-analysis OptiIQ independent of cache and rate-limit state. Options: (a) use stored board financials only when doc.model_v == MODEL_V; (b) persist the full 8-quarter get_quarterly_financials and get_earnings results in Mongo, as candles already are, and serve stale data on 429 or a budget skip; (c) if the inputs are incomplete, return available=False with 'data temporarily unavailable, retry' instead of a materially different value.",
+    "Mark the v5 board docs written before SBC parsing as stale (for example, bump MODEL_V to 6 or reset their fund_ts) so their values get the SBC add-back.",
+    "Optional: handle one-off impairments (APD) by falling back to the historical margin when the TTM operating margin is negative but the 5-year margin is clearly positive.",
+    "Calibration note for the user (business decision, not a bug): with ERP 6%, Blume beta floor 0.8 and 3.5% terminal growth, most high-multiple names come out far below price. TSLA -93%, CRWD -92%, PLTR -86%, PANW -77%, Agilent -65% and ABBV -41%; the board has 164 of 443 rated stocks 'very_over'. These are the stocks the user named as problems with the old model. Most are flagged low confidence, so their line is hidden, but the user may still find this unexpected."
+  ],
+  "critical_code_review_comments": [
+    "server.py:798-801: the fallback to stored financials doesn't check model_v, so it feeds pre-v5 rows (missing fiscal_year/operating_income/sbc) into the v5 model.",
+    "valuation_board.py:318: the v5 check relies only on model_v. Docs saved with partial v5 fields (no sbc) are never re-refreshed early.",
+    "engine.py:1068-1074: fcf/ni are computed only for the bank-model decision. Fine, but fcf from quarterly rows assumes 4 rows.",
+    "engine.py ~1000-1260: the template math is correct per independent recomputation. The code is clean, but optiiq_value is about 220 lines in one function; consider splitting the input-gathering from the model.",
+    "uvicorn --reload watches backend/tests: writing test files restarts the backend and clears the in-memory Finnhub caches (affects test reproducibility)."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter32_optiiq_dcf_unit.py", "/app/backend/tests/test_iter32_optiiq_dcf_api.py"],
+  "success_rate": {"backend": "100% of tests (19/19); OptiIQ determinism issue found outside the assertions", "frontend": "100% (OptiIQ card, scenario editor, buy levels render)"},
+  "seed_data_creation": "None. No users created; DB read-only checks of valuation_board only.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Use admin lingesa4@gmail.com / Linges1@12. Run the unit tests with -n 0 (pytest.ini adds xdist). Run the API tests with -n 0 -s; they take ~55s. To reproduce the determinism bug, call long analysis for an uncached ticker right after a backend reload, or while the Finnhub budget is exhausted, then call it again: compare optiiq.value and len(financials). Old test_iter29/30 assert the v4 model and are obsolete.",
+  "rca_of_issue": "Root cause of the cold-call value mismatch: fetch_stock_bundle plus financials plus candles is about 12 Finnhub calls per long analysis, and the board loop uses up to 30 per minute. When _slot() budget is exhausted, _get returns None, get_quarterly_financials returns [] (no stale cache after a reload), and server.py uses valuation_board.financials. For the 488 docs not yet at model_v 5, those rows lack fiscal_year, fiscal_quarter, operating_income, sbc and dep_amort. Consensus YoY matching fails (only the run-rate is used) and the SBC add-back becomes 0, giving a different growth, margin and value. Reproduced for TSLA, CRWD, MSFT and PLTR. Mitigation: see action item 1."
+}

@@ -32,7 +32,7 @@ from market import (
     UNIVERSE, UNIVERSE_INDEX, fetch_stock_bundle, get_quote, get_candles,
     sma as calc_sma, rsi as calc_rsi, support_resistance, detect_candle_patterns, detect_chart_patterns,
 )
-from market import get_earnings, get_metrics, get_quarterly_financials, get_peers
+from market import get_capex_history, get_earnings, get_metrics, get_quarterly_financials, get_peers
 import extras
 import billing
 import tradier
@@ -40,7 +40,7 @@ import chain
 import strategies
 import broadcasts
 import valuation_board
-from valuation_board import fill_balance_gaps, optiiq_sector, buy_plan
+from valuation_board import fill_balance_gaps, optiiq_sector, buy_plan, MODEL_V, FIN_FIELDS
 from engine import (
     STRATEGIES, STRATEGY_META, PROFILES, ACCOUNT_TYPES, EXP_DAYS, MIN_POP_FLOOR, CREDIT_VARIANTS, LEVEL_NAMES, user_options_level,
     volatility_profile, build_idea, default_filters, passes, candidate_strategies, compact,
@@ -715,9 +715,10 @@ def optiiq_brief(o: Dict[str, Any], bp: Dict[str, Any]) -> str:
     else:
         head = f"OptiIQ Value (intrinsic value) ${o['value']} = {o['upside_pct']:+}% vs price"
         if o.get("model") == "dcf":
-            d, g = o.get("discount") or {}, o.get("growth") or {}
-            head += (f" (10y FCF DCF, WACC {d.get('wacc', 0) * 100:.1f}%, growth {g.get('stage1', 0) * 100:.1f}% for years 1-5 "
-                     f"then {g.get('stage2', 0) * 100:.1f}%, terminal {g.get('long_term', 0) * 100:.1f}%)")
+            d, g, m = o.get("discount") or {}, o.get("growth") or {}, o.get("margin") or {}
+            head += (f" (10y revenue-driven DCF, WACC {d.get('wacc', 0) * 100:.1f}%, revenue growth {g.get('year1', 0) * 100:.1f}% in year 1 "
+                     f"fading {g.get('fade', 0) * 100:.0f}% a year toward {g.get('terminal', 0) * 100:.1f}%, EBIT margin "
+                     f"{m.get('initial', 0) * 100:.1f}% toward {m.get('stable', 0) * 100:.1f}%)")
         head += ", low confidence." if o.get("confidence") == "low" else "."
     lv = "; ".join(f"{l['label']} ${l['price']} ({l['below_price_pct']}%, {l.get('strength', '')})" for l in bp.get("levels") or [])
     return f"{head} Buy levels: {lv or 'none'}. {bp.get('summary') or ''}"
@@ -775,8 +776,9 @@ async def stock_analysis(req: StockAnalysisReq, authorization: Optional[str] = H
         )
     else:
         metrics = bundle.get("metrics") or {}
-        stored = await db.valuation_board.find_one({"_id": tk}, {"metrics": 1, "financials": 1}) or {}
-        if not metrics.get("market_cap") and stored.get("metrics"):  # provider rate-limited: last stored copy from the valuation board
+        stored = await db.valuation_board.find_one({"_id": tk}, {"metrics": 1, "financials": 1, "estimates": 1, "capex_history": 1, "model_v": 1}) or {}
+        live_metrics = bool(metrics.get("market_cap"))
+        if not live_metrics and stored.get("metrics"):  # provider rate-limited: last stored copy from the valuation board
             metrics = stored["metrics"]
         earnings = bundle.get("earnings") or {}
         pt = bundle.get("price_target")
@@ -785,9 +787,10 @@ async def stock_analysis(req: StockAnalysisReq, authorization: Optional[str] = H
         async with httpx.AsyncClient() as client:
             try:
                 financials = await get_quarterly_financials(client, tk, 8)
+                capex_hist = await get_capex_history(client, tk)
             except Exception as ex:
                 logger.warning(f"financials {tk}: {ex}")
-                financials = []
+                financials, capex_hist = [], []
             history = await get_candles(client, tk, 504)  # ~2 years for the buy-level chart
         if len(history) < len(candles):
             history = candles
@@ -795,10 +798,30 @@ async def stock_analysis(req: StockAnalysisReq, authorization: Optional[str] = H
         dcf_in = default_dcf_inputs(metrics)
         valuation = dcf_valuation(price, eps, dcf_in["growth"], dcf_in["discount_pct"], dcf_in["terminal_pe"], dcf_in["weights"])
         model_fins = financials
-        if not financials and stored.get("financials"):
-            model_fins = [dict(r) for r in stored["financials"]]
-            fill_balance_gaps(model_fins, metrics, price)
-        optiiq = optiiq_value(price, metrics, model_fins, optiiq_sector(tk, bundle.get("sector") or UNIVERSE_INDEX.get(tk, {}).get("sector")), tk)
+        estimates = earnings.get("estimates") or []
+        live_ok = live_metrics and bool(financials)
+        if not live_ok:
+            logger.info(f"optiiq {tk}: live metrics={live_metrics} financials={len(financials)}, using saved inputs")
+        if live_ok:  # keep the last complete inputs, so a rate-limited provider doesn't blank (or skew) the value later
+            await db.optiiq_inputs.update_one({"_id": tk}, {"$set": {
+                "metrics": metrics, "financials": [{k: r.get(k) for k in FIN_FIELDS} for r in financials[-4:]],
+                "estimates": estimates, "capex_history": capex_hist, "model_v": MODEL_V, "ts": time.time()}}, upsert=True)
+        else:
+            saved = await db.optiiq_inputs.find_one({"_id": tk}) or {}
+            for doc in (saved, stored):  # last complete copy from Analyze, else the valuation board
+                if doc.get("model_v") == MODEL_V and doc.get("metrics") and doc.get("financials"):
+                    metrics = metrics if live_metrics else doc["metrics"]
+                    model_fins = [dict(r) for r in doc["financials"]]
+                    fill_balance_gaps(model_fins, metrics, price)
+                    estimates = estimates or doc.get("estimates") or []
+                    capex_hist = capex_hist or doc.get("capex_history") or []
+                    live_ok = True
+                    break
+        if live_ok:
+            optiiq = optiiq_value(price, metrics, model_fins, optiiq_sector(tk, bundle.get("sector") or UNIVERSE_INDEX.get(tk, {}).get("sector")), tk,
+                                  estimates, capex_hist)
+        else:  # rate-limited with no complete saved copy: say so rather than value the company on partial data
+            optiiq = {"available": False, "reason": "Company filings are temporarily unavailable. Try again in a minute."}
         iv_line = (optiiq["value"], "OptiIQ Value") if optiiq.get("available") and optiiq.get("confidence") != "low" else (None, None)
         bp = buy_plan(history, price, iv_line[0])
         resp = {
@@ -975,6 +998,55 @@ async def alerts_add(req: AlertAddReq, authorization: Optional[str] = Header(def
     alert.pop("user_id", None)
     alert["created_at"] = alert["created_at"].isoformat()
     return alert
+
+class PlanAlertsReq(BaseModel):
+    ticker: str = Field(min_length=1, max_length=10)
+    direction: Literal["long", "short"]
+    target: float = Field(gt=0, le=1e7, allow_inf_nan=False)
+    stop: float = Field(gt=0, le=1e7, allow_inf_nan=False)
+    label: str = Field(default="Trade plan", min_length=1, max_length=30)
+
+    @model_validator(mode="after")
+    def _sides(self):
+        if (self.direction == "long" and self.stop >= self.target) or (self.direction == "short" and self.stop <= self.target):
+            raise ValueError("For a long plan the stop must be below the target (above it for a short plan)")
+        return self
+
+
+@api_router.post("/alerts/plan")
+async def alerts_plan(req: PlanAlertsReq, authorization: Optional[str] = Header(default=None)):
+    """One tap: a stock trade plan's target and stop as two linked price alerts (when one fires, the other closes)."""
+    user = await get_user_from_token(authorization)
+    long = req.direction == "long"
+    tk = req.ticker.upper().strip()
+    kinds = (("price_above" if long else "price_below", round(req.target, 2), "target"),
+             ("price_below" if long else "price_above", round(req.stop, 2), "stop"))
+    # the same plan tapped twice (e.g. after reopening the screen) returns the pair that already exists
+    same = await db.alerts.find({"user_id": user["user_id"], "ticker": tk, "active": True, "group_id": {"$exists": True},
+                                 "$or": [{"kind": k, "threshold": th, "note": f"{req.label} {side}"} for k, th, side in kinds]},
+                                {"_id": 0, "user_id": 0}).to_list(10)
+    groups = {a["group_id"] for a in same if sum(1 for b in same if b["group_id"] == a["group_id"]) == 2}
+    if groups:
+        rows = [a for a in same if a["group_id"] in groups][:2]
+        for r in rows:
+            r["created_at"] = r["created_at"].isoformat() if hasattr(r.get("created_at"), "isoformat") else r.get("created_at")
+        return {"items": rows, "group_id": rows[0]["group_id"], "existing": True}
+    raw = await db.users.find_one({"user_id": user["user_id"]}, {"_id": 0}) or user
+    limit = billing.compute_access(raw)["features"]["alerts"]
+    have = await db.alerts.count_documents({"user_id": user["user_id"]})
+    if have + 2 > limit:
+        raise HTTPException(status_code=403, detail=f"This needs 2 free alert slots ({have}/{limit} used). Remove an alert or upgrade.")
+    group, now = f"grp_{uuid.uuid4().hex[:10]}", now_utc()
+    rows = [{"alert_id": f"alert_{uuid.uuid4().hex[:12]}", "user_id": user["user_id"], "ticker": tk, "kind": kind,
+             "threshold": th, "note": f"{req.label} {side}", "active": True, "group_id": group, "created_at": now}
+            for kind, th, side in kinds]
+    await db.alerts.insert_many(rows)
+    for r in rows:
+        r.pop("_id", None)
+        r.pop("user_id", None)
+        r["created_at"] = r["created_at"].isoformat()
+    return {"items": rows, "group_id": group}
+
 
 @api_router.get("/alerts")
 async def alerts_list(authorization: Optional[str] = Header(default=None)):

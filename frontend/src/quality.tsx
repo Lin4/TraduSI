@@ -4,6 +4,7 @@ import Icon from "@react-native-vector-icons/feather";
 
 import { colors, spacing, radius, themedStyles, useTheme } from "./theme";
 import { ScoreRing, EquityCurve, Gauge, money, signed, tone } from "./quantcharts";
+import { PillarRow } from "./ScoreBreakdown";
 
 const PILLARS: [string, string, string][] = [
   ["expected_return", "Expected return", "Edge per $ at risk, plus how this setup did on its own history"],
@@ -122,15 +123,9 @@ export function OptiScoreCard({ r }: { r: any }) {
           ) : null}
         </View>
       </View>
+      {r.drivers ? <Text testID="optiscore-breakdown-hint" style={s.pillarHint}>Tap a part to see what moves it up or down</Text> : null}
       {PILLARS.map(([k, label, hint]) => (
-        <View key={k} testID={`pillar-${k}`} style={s.pillar}>
-          <View style={s.pillarHead}>
-            <Text style={s.pillarLabel}>{label}</Text>
-            <Text style={[s.pillarVal, { color: tone(p[k] ?? 0) }]}>{Math.round(p[k] ?? 0)}</Text>
-          </View>
-          <Gauge value={p[k] ?? 0} />
-          <Text style={s.pillarHint}>{hint}</Text>
-        </View>
+        <PillarRow key={k} k={k} label={label} hint={hint} value={p[k] ?? 0} drivers={r.drivers?.[k]} weight={r.score_weights?.[k]} />
       ))}
       {(r.fit_reasons || []).map((t: string) => <Text key={t} style={s.warnText}>• {t}</Text>)}
     </View>

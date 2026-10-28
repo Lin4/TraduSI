@@ -36,6 +36,10 @@ FUND_TTL = 86400.0        # fundamentals refresh once a day
 RETRY_TTL = 3600.0        # stocks with missing data are retried after an hour
 BOARD_FINNHUB_CAP = 30    # board pauses while the last minute's Finnhub calls exceed this (budget 55/min)
 PRICE_EVERY = 600
+MODEL_V = 7               # OptiIQ model version the stored inputs were collected for (+ same-quarter growth, own capex history)
+FIN_FIELDS = ("label", "end_date", "fiscal_year", "fiscal_quarter", "revenue", "operating_income", "dep_amort", "sbc", "capex",
+              "free_cash_flow", "operating_cash_flow", "net_income", "cash", "cash_and_investments", "total_debt", "equity",
+              "receivables", "inventory", "payables", "deferred_revenue")
 
 
 def bucket_of(premium: float) -> str:
@@ -73,7 +77,8 @@ def evaluate(doc: Dict[str, Any], price: float) -> Dict[str, Any]:
     rows = [dict(r) for r in doc.get("financials") or []]
     metrics = doc.get("metrics") or {}
     fill_balance_gaps(rows, metrics, price)
-    o = optiiq_value(price, metrics, rows, doc.get("sector") or "", doc.get("ticker") or doc.get("_id") or "")
+    o = optiiq_value(price, metrics, rows, doc.get("sector") or "", doc.get("ticker") or doc.get("_id") or "", doc.get("estimates"),
+                     doc.get("capex_history"))
     if not o.get("available") or o.get("confidence") == "low":
         why = o.get("reason") or "Value is far from the price (unusual inputs), so it isn't grouped"
         return {"price": round(price, 2), "value": None, "premium": None, "bucket": None, "reason": why}
@@ -290,12 +295,16 @@ def register(api_router, *, db, get_user: Callable, send_push: Callable, market_
         tk = s["ticker"]
         metrics = await market.get_metrics(client, tk)
         fins = await market.get_quarterly_financials(client, tk, 8) if metrics.get("market_cap") else []
+        earnings = await market.get_earnings(client, tk) if metrics.get("market_cap") else {}
+        capex_hist = await market.get_capex_history(client, tk) if fins else []
         if not price:
             price = ((await market.get_quote(client, tk)) or {}).get("price")
         doc: Dict[str, Any] = {
             "ticker": tk, "name": s["name"], "sector": s["sector"], "metrics": metrics,
-            "financials": [{k: r.get(k) for k in ("label", "end_date", "free_cash_flow", "operating_cash_flow", "net_income", "cash",
-                                                  "cash_and_investments", "total_debt", "equity")} for r in fins[-4:]],
+            "financials": [{k: r.get(k) for k in FIN_FIELDS} for r in fins[-4:]],
+            "estimates": earnings.get("estimates") or [],
+            "capex_history": capex_hist,
+            "model_v": MODEL_V,
             "fund_ts": time.time() - (FUND_TTL - RETRY_TTL if not (metrics.get("market_cap") and fins) else 0),
         }
         if price:
@@ -308,7 +317,9 @@ def register(api_router, *, db, get_user: Callable, send_push: Callable, market_
         while True:
             try:
                 now = time.time()
-                seen = {d["_id"]: d.get("fund_ts", 0) async for d in col.find({}, {"fund_ts": 1})}
+                # stocks saved by an older OptiIQ model are refreshed first, with the inputs the current model needs
+                seen = {d["_id"]: d.get("fund_ts", 0) if d.get("model_v") == MODEL_V else 0
+                        async for d in col.find({}, {"fund_ts": 1, "model_v": 1})}
                 todo = sorted((s for s in SP500 if now - seen.get(s["ticker"], 0) > FUND_TTL), key=lambda s: seen.get(s["ticker"], 0))
                 if todo:
                     async with httpx.AsyncClient() as client:
@@ -333,7 +344,7 @@ def register(api_router, *, db, get_user: Callable, send_push: Callable, market_
                 async with httpx.AsyncClient() as client:
                     prices = await tradier.quotes(client, [s["ticker"] for s in SP500])
                 ops = [UpdateOne({"_id": d["_id"]}, {"$set": {**evaluate(d, prices[d["_id"]]), "price_ts": time.time()}})
-                       async for d in col.find({"metrics": {"$exists": True}}) if prices.get(d["_id"])]
+                       async for d in col.find({"metrics": {"$exists": True}, "model_v": MODEL_V}) if prices.get(d["_id"])]
                 if ops:
                     await col.bulk_write(ops, ordered=False)
                     cache.clear()
@@ -364,6 +375,9 @@ def register(api_router, *, db, get_user: Callable, send_push: Callable, market_
                                              {"$set": {"active": False, "triggered_at": now, "triggered_price": round(p, 2)}})
             if not res.modified_count:
                 continue
+            if a.get("group_id"):  # trade-plan pair: target hit closes the stop alert and vice versa
+                await db.alerts.update_many({"group_id": a["group_id"], "alert_id": {"$ne": a["alert_id"]}, "active": True},
+                                            {"$set": {"active": False, "closed_by": a["alert_id"]}})
             title = f"{a['ticker']} {'dropped to' if below else 'rose to'} ${p:,.2f}"
             message = f"{a.get('note') or ('Price below' if below else 'Price above')} · your level ${th:,.2f}"
             await db.alert_events.insert_one({

@@ -293,6 +293,13 @@ async def get_metrics(client: httpx.AsyncClient, ticker: str) -> Dict[str, Any]:
         "pcf_ttm": m.get("pcfShareTTM"),    # price / operating cash flow per share (TTM)
         "eps_growth_3y": m.get("epsGrowth3Y"),
         "eps_growth_ttm": m.get("epsGrowthTTMYoy"),
+        # revenue-driven DCF (OptiIQ Value)
+        "revenue_growth_q_yoy": m.get("revenueGrowthQuarterlyYoy"),
+        "revenue_ps_ttm": m.get("revenuePerShareTTM"),
+        "ebitda_ps_ttm": m.get("ebitdPerShareTTM"),
+        "operating_margin_ttm": m.get("operatingMarginTTM"),
+        "operating_margin_annual": m.get("operatingMarginAnnual"),
+        "operating_margin_5y": m.get("operatingMargin5Y"),
     }
     _cache_set(key, result)
     return result
@@ -319,8 +326,17 @@ _FIN_CONCEPTS = {
     "debt_long": ["us-gaap_LongTermDebtNoncurrent", "us-gaap_LongTermDebt", "us-gaap_LongTermDebtAndCapitalLeaseObligations"],
     "debt_current": ["us-gaap_LongTermDebtCurrent", "us-gaap_DebtCurrent", "us-gaap_LongTermDebtAndCapitalLeaseObligationsCurrent"],
     "debt_short": ["us-gaap_CommercialPaper", "us-gaap_ShortTermBorrowings"],
+    # revenue-driven DCF inputs: operating income, D&A and operating working capital
+    "operating_income": ["us-gaap_OperatingIncomeLoss"],
+    "sbc": ["us-gaap_ShareBasedCompensation", "us-gaap_AllocatedShareBasedCompensationExpense"],
+    "dep_amort": ["us-gaap_DepreciationDepletionAndAmortization", "us-gaap_DepreciationAndAmortization",
+                  "us-gaap_DepreciationAmortizationAndAccretionNet", "us-gaap_Depreciation"],
+    "receivables": ["us-gaap_AccountsReceivableNetCurrent", "us-gaap_ReceivablesNetCurrent"],
+    "inventory": ["us-gaap_InventoryNet"],
+    "payables": ["us-gaap_AccountsPayableCurrent", "us-gaap_AccountsPayableAndAccruedLiabilitiesCurrent"],
+    "deferred_revenue": ["us-gaap_ContractWithCustomerLiabilityCurrent", "us-gaap_DeferredRevenueCurrent"],
 }
-_FLOW_KEYS = ("revenue", "net_income", "operating_cash_flow", "capex")
+_FLOW_KEYS = ("revenue", "net_income", "operating_cash_flow", "capex", "operating_income", "dep_amort", "sbc")
 
 
 def _pick(items: Dict[str, float], names: List[str]) -> Optional[float]:
@@ -328,6 +344,44 @@ def _pick(items: Dict[str, float], names: List[str]) -> Optional[float]:
         if items.get(n) is not None:
             return float(items[n])
     return None
+
+
+def _report_items(rep: Dict[str, Any]) -> Dict[str, float]:
+    items: Dict[str, float] = {}
+    for sec in ("ic", "cf", "bs"):
+        for it in (rep.get("report") or {}).get(sec) or []:
+            if isinstance(it.get("value"), (int, float)):
+                items.setdefault(it["concept"], it["value"])
+    return items
+
+
+def _capex_history(annual: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Fiscal-year revenue and capex from 10-K filings, oldest -> newest (the company's own long-run capex level)."""
+    out = {}
+    for rep in annual:
+        items = _report_items(rep)
+        rev, cx = _pick(items, _FIN_CONCEPTS["revenue"]), _pick(items, _FIN_CONCEPTS["capex"])
+        if cx is None:  # company-specific tags, e.g. nvda_PurchasesOfPropertyAndEquipmentAndIntangibleAssets
+            cx = next((float(v) for c, v in items.items() if ("PurchasesOfPropertyAndEquipment" in c or "PaymentsToAcquirePropertyPlantAndEquipment" in c)
+                       and "Financ" not in c), None)
+        if rep.get("year") and rev and rev > 0 and cx is not None:
+            out.setdefault(int(rep["year"]), {"year": int(rep["year"]), "revenue": rev, "capex": abs(cx)})
+    return [out[y] for y in sorted(out)]
+
+
+async def get_capex_history(client: httpx.AsyncClient, ticker: str) -> List[Dict[str, Any]]:
+    """Annual revenue + capex history (filled by get_quarterly_financials from the same 10-K call, else fetched)."""
+    key = f"hist:{ticker}"
+    hit = _cache_get(key, 86400.0)
+    if hit is not None:
+        return hit
+    annual = await _get(client, "https://finnhub.io/api/v1/stock/financials-reported",
+                        {"symbol": ticker, "freq": "annual", "token": FINNHUB_KEY})
+    if annual is None:
+        return _stale(key) or []
+    out = _capex_history(annual.get("data") or [])
+    _cache_set(key, out)
+    return out
 
 
 async def get_quarterly_financials(client: httpx.AsyncClient, ticker: str, n: int = 3) -> List[Dict[str, Any]]:
@@ -343,17 +397,17 @@ async def get_quarterly_financials(client: httpx.AsyncClient, ticker: str, n: in
         return _stale(key) or []
     annual = await _get(client, "https://finnhub.io/api/v1/stock/financials-reported",
                         {"symbol": ticker, "freq": "annual", "token": FINNHUB_KEY}) or {}
+    if annual.get("data"):
+        _cache_set(f"hist:{ticker}", _capex_history(annual["data"]))
     rows: Dict[tuple, Dict[str, Any]] = {}
     for rep, is_annual in [(r, False) for r in data.get("data") or []] + [(r, True) for r in (annual.get("data") or [])[:2]]:
         q = 4 if is_annual else int(rep.get("quarter") or 0)
         if not q:
             continue
-        items: Dict[str, float] = {}
-        for sec in ("ic", "cf", "bs"):
-            for it in (rep.get("report") or {}).get(sec) or []:
-                if isinstance(it.get("value"), (int, float)):
-                    items.setdefault(it["concept"], it["value"])
+        items = _report_items(rep)
         vals = {k: _pick(items, v) for k, v in _FIN_CONCEPTS.items()}
+        if vals["st_investments"] is None:  # company-specific tags, e.g. nvda_MarketableSecuritiesAndEquitySecuritiesFVNI
+            vals["st_investments"] = next((float(v) for c, v in items.items() if "MarketableSecurities" in c and "Noncurrent" not in c), None)
         if vals["revenue"] is None and items.get("us-gaap_InterestIncomeExpenseNet") is not None and items.get("us-gaap_NoninterestIncome") is not None:
             vals["revenue"] = float(items["us-gaap_InterestIncomeExpenseNet"]) + float(items["us-gaap_NoninterestIncome"])  # bank net revenue
         rows[(int(rep["year"]), q)] = {"end_date": (rep.get("endDate") or "")[:10], "ytd": vals}
@@ -368,7 +422,7 @@ async def get_quarterly_financials(client: httpx.AsyncClient, ticker: str, n: in
             a = cur["ytd"].get(k)
             b = prev["ytd"].get(k) if prev else 0.0
             row[k] = (a - b) if a is not None and b is not None else None
-        for k in ("cash", "total_liabilities", "equity"):
+        for k in ("cash", "total_liabilities", "equity", "receivables", "inventory", "payables", "deferred_revenue"):
             row[k] = cur["ytd"].get(k)
         cash_st, st_inv = cur["ytd"].get("cash_st"), cur["ytd"].get("st_investments")
         row["cash_and_investments"] = cash_st if cash_st is not None else \
@@ -403,20 +457,24 @@ async def get_earnings(client: httpx.AsyncClient, ticker: str) -> Dict[str, Any]
         "symbol": ticker, "from": today.isoformat(), "to": end.isoformat(), "token": FINNHUB_KEY,
     })
     if data is None:
-        return _stale(key) or {"date": None, "eps_estimate": None, "eps_actual": None, "revenue_estimate": None}
-    rows = data.get("earningsCalendar") or []
+        return _stale(key) or {"date": None, "eps_estimate": None, "eps_actual": None, "revenue_estimate": None, "estimates": []}
+    rows = sorted(data.get("earningsCalendar") or [], key=lambda r: r.get("date") or "")  # soonest first
+    # analyst consensus revenue for the coming quarters (fiscal year/quarter match the SEC filings)
+    estimates = [{"year": r.get("year"), "quarter": r.get("quarter"), "date": r.get("date"), "revenue_estimate": r.get("revenueEstimate")}
+                 for r in rows if r.get("revenueEstimate") and r.get("year") and r.get("quarter")]
     if not rows:
         past = today - dt.timedelta(days=120)
         data2 = await _get(client, "https://finnhub.io/api/v1/calendar/earnings", {
             "symbol": ticker, "from": past.isoformat(), "to": today.isoformat(), "token": FINNHUB_KEY,
         }) or {}
-        rows = data2.get("earningsCalendar") or []
+        rows = sorted(data2.get("earningsCalendar") or [], key=lambda r: r.get("date") or "", reverse=True)  # latest first
     row = rows[0] if rows else {}
     result = {
         "date": row.get("date"),
         "eps_estimate": row.get("epsEstimate"),
         "eps_actual": row.get("epsActual"),
         "revenue_estimate": row.get("revenueEstimate"),
+        "estimates": estimates,
     }
     _cache_set(key, result)
     return result

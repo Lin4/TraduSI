@@ -610,8 +610,66 @@ def market_pillars(i: Dict[str, Any]) -> Dict[str, float]:
         liq_s = min(liq_s, 60.0)
     pq = 0.5 * vrp + 0.5 * liq_s
     return {"expected_return": round(er, 1), "risk": round(_clip(risk), 1), "premium_quality": round(pq, 1),
-            "detail": {"ev_pct_of_risk": round(ev_pct, 2), "reward_risk_score": round(rr_score, 1), "pop_score": round(pop_score, 1),
-                       "iv_hv_ratio": round(ratio, 2), "vrp_score": round(vrp, 1), "liquidity_score": round(liq_s, 1)}}
+            "detail": {"ev_pct_of_risk": round(ev_pct, 2), "er_model": round(er, 1), "reward_risk_score": round(rr_score, 1),
+                       "pop_score": round(pop_score, 1), "iv_hv_ratio": round(ratio, 2), "vrp_score": round(vrp, 1),
+                       "liquidity_score": round(liq_s, 1), "spread_pct": liq.get("spread_pct_of_premium"), "min_oi": oi,
+                       "liq_estimated": bool(liq.get("estimated", True))}}
+
+
+def score_drivers(i: Dict[str, Any]) -> Dict[str, List[Dict[str, Any]]]:
+    """What moves each OptiScore pillar up or down: points vs a neutral 50. A pillar's factors add up to its score."""
+    p = i.get("pillars") or {}
+    d = p.get("detail") or {}
+    f = lambda label, pts, note: {"label": label, "pts": round(pts, 1), "note": note}
+
+    er = d.get("er_model", p.get("expected_return", 50.0))
+    exp_rows = [f("Expected value per $ at risk", er - 50,
+                  f"The model expects {d.get('ev_pct_of_risk', 0):+.1f}% of the money at risk per trade, after fees")]
+    if d.get("history_score") is not None:
+        exp_rows.append(f("This setup on the stock's own history", 0.4 * (d["history_score"] - er),
+                          "The same plan backtested on this stock's past prices (40% weight)"))
+
+    ev = i.get("events") or {}
+    rr_s, pop_s = d.get("reward_risk_score", 50.0), d.get("pop_score", 50.0)
+    if i.get("max_loss") is None:
+        rr_note = "Loss isn't capped, so this scores low"
+    else:
+        gain = i["max_profit"] if i.get("max_profit") is not None else abs(i["max_loss"]) * 2
+        rr_note = f"Risk ${abs(i['max_loss']):,.0f} to make ${gain:,.0f}"
+    risk_rows = [f("Reward vs risk", 0.5 * (rr_s - 50), rr_note),
+                 f("Chance of profit", 0.5 * (pop_s - 50), f"Probability of profit {i.get('pop')}% (50% scores zero, 100% scores full)")]
+    raw = 0.5 * rr_s + 0.5 * pop_s
+    for on, pts, label, note in ((ev.get("earnings_in_window"), -15, "Earnings before expiration", "A report inside the trade can gap the stock"),
+                                 (ev.get("assignment_risk") == "High", -10, "High assignment risk", "A short strike is likely to finish in the money"),
+                                 (ev.get("pin_risk"), -10, "Pin risk", "A short strike sits within 1% of the price near expiration")):
+        if on:
+            risk_rows.append(f(label, pts, note))
+            raw += pts
+    if abs(p.get("risk", raw) - raw) >= 0.05:
+        risk_rows.append(f("Kept within 0-100", p.get("risk", raw) - raw, "Pillar scores stop at 0 and 100"))
+
+    ratio = d.get("iv_hv_ratio")
+    credit = i.get("premium_type") == "credit"
+    liq_note = (f"Bid-ask spread {d.get('spread_pct')}% of the premium · open interest {d.get('min_oi') or 0:,}"
+                if d.get("spread_pct") is not None else f"Open interest {d.get('min_oi') or 0:,}")
+    if d.get("liq_estimated"):
+        liq_note += " · estimated, so capped at 60"
+    prem_rows = [f("Option price vs real movement", 0.5 * (d.get("vrp_score", 50.0) - 50),
+                   f"Options price in {ratio}x the movement the stock really shows; "
+                   + ("selling rich premium scores higher" if credit else "buying cheap options scores higher")),
+                 f("Liquidity", 0.5 * (d.get("liquidity_score", 50.0) - 50), liq_note)]
+
+    fd = d.get("fit")
+    if not fd:
+        fit_rows = [f("Neutral", 0.0, "No profile or account size used for this idea")]
+    else:
+        loss_note = (f"Max loss is {fd['loss_pct']}% of your account (your limit {fd['loss_limit']}%)" if fd.get("loss_pct") is not None
+                     else "Loss isn't capped or assignment can exceed the plan")
+        fit_rows = [f("Matches your risk profile" if fd["profile"] >= 100 else "Outside your risk profile", (fd["profile"] - 50) / 3,
+                      "Strategy is one your chosen profile uses" if fd["profile"] >= 100 else "Strategy belongs to a different risk profile"),
+                    f("Capital used", (fd["capital"] - 50) / 3, f"Ties up {fd['capital_pct']}% of your account (5% or less scores full)"),
+                    f("Max loss vs your limit", (fd["loss"] - 50) / 3, loss_note)]
+    return {"expected_return": exp_rows, "risk": risk_rows, "premium_quality": prem_rows, "user_fit": fit_rows}
 
 
 def apply_history(i: Dict[str, Any]) -> None:
@@ -629,11 +687,13 @@ def apply_history(i: Dict[str, Any]) -> None:
     i["optiscore"] = int(round(total))
     i["optiscore_grade"] = "Excellent" if total >= 80 else "Strong" if total >= 65 else "Fair" if total >= 50 else "Weak"
     i["score"] = round(total, 2)
+    i["drivers"] = score_drivers(i)
 
 
 def apply_fit(i: Dict[str, Any], profile: Optional[str], account_size: Optional[float], filters: Optional[Dict[str, Any]]) -> None:
     """User-fit pillar + final OptiScore. Without user context fit is neutral (50)."""
     reasons = []
+    fit_detail = None
     if not profile or not account_size:
         fit = 50.0
     else:
@@ -646,19 +706,25 @@ def apply_fit(i: Dict[str, Any], profile: Optional[str], account_size: Optional[
         if u > 25:
             reasons.append(f"Uses {u:.0f}% of your account as collateral")
         lim = (filters or {}).get("max_loss_pct") or PROFILES.get(profile, PROFILES["low_low"])["max_loss_pct"]
+        lp = None
         if i["max_loss"] is None or i["strategy"] in ASSIGNMENT_STRATS:
             loss_s = 40.0 if i["max_loss"] is None else 70.0
         else:
             lp = abs(i["max_loss"]) / max(account_size, 1) * 100
             loss_s = 100.0 if lp <= lim * 0.5 else _clip(100 - (lp / lim - 0.5) * 80)
         fit = (prof_s + cap_s + loss_s) / 3
+        fit_detail = {"profile": prof_s, "capital": round(cap_s, 1), "loss": round(loss_s, 1), "capital_pct": round(u, 1),
+                      "loss_pct": round(lp, 1) if lp is not None else None, "loss_limit": lim}
     p = {**i["pillars"], "user_fit": round(fit, 1)}
+    p["detail"] = {**(p.get("detail") or {}), "fit": fit_detail}
     total = sum(p[k] * w for k, w in OPTISCORE_WEIGHTS.items())
     i["pillars"] = p
     i["optiscore"] = int(round(total))
     i["optiscore_grade"] = "Excellent" if total >= 80 else "Strong" if total >= 65 else "Fair" if total >= 50 else "Weak"
     i["fit_reasons"] = reasons
     i["score"] = round(total, 2)
+    i["drivers"] = score_drivers(i)
+    i["score_weights"] = OPTISCORE_WEIGHTS
 
 
 # ---------------------------------------------------------------- management plan
@@ -971,6 +1037,9 @@ MRP = 0.06            # market risk premium over the risk-free rate (CAPM)
 DEBT_SPREAD = 0.01    # pre-tax cost of debt = risk-free rate + spread
 TAX_RATE = 0.21
 BETA_CHECK = (0.75, 1.0, 1.25)
+TERMINAL_GROWTH = 0.035   # stable perpetual growth after year 10
+BASE_FADE = 0.20          # share of the gap to terminal growth / stable margin closed each year
+SCENARIOS = {"bear": (-0.08, 0.015), "bull": (0.05, -0.005)}  # (Year-1 growth, WACC) adjustments
 # Financials-sector names whose cash flows work like any other business (payments, exchanges & data,
 # insurance brokers, traditional asset managers): cash-flow DCF, not the bank model.
 ASSET_LIGHT_FINANCIALS = {
@@ -1004,18 +1073,65 @@ def _bank_model(sector: str, ticker: str, fcf: Optional[float], ni: float) -> bo
     return False
 
 
-def optiiq_value(price: float, metrics: Dict[str, Any], financials: List[Dict[str, Any]], sector: str = "", ticker: str = "") -> Dict[str, Any]:
-    """Intrinsic value per share, built like an analyst DCF sheet.
-    1. Free cash flow to the firm (operating cash flow - capex + after-tax interest, last 4 quarters). If it sits below steady-state earnings
-       ((min(net income, operating cash flow) + after-tax interest) x (1 - long-term growth / ROE)), e.g. during a capex build-out,
-       it converges there by year 5.
-    2. Growth: years 1-5 = median of revenue growth (TTM, 3y, 5y) and EPS growth (3y, 5y), at most 5 points above
-       the revenue median, 0-25%;
-       years 6-10 = half of that; after year 10 = 3-5% depending on how fast the company grows.
-    3. Discount rate = WACC: cost of equity by CAPM (risk-free + adjusted beta x market risk premium) and
-       after-tax cost of debt, weighted by market cap and total debt. Mid-year discounting.
-    4. Terminal value = year-10 cash flow x (1 + g) / (WACC - g).
-    5. Value of operations + cash & short-term investments - debt = equity value; / shares = value per share.
+def _ttm(rows: List[Dict[str, Any]], key: str) -> Optional[float]:
+    """Sum of the last 4 quarters, only when they are 4 consecutive quarters that all report the item."""
+    last = rows[-4:]
+    vals = [r.get(key) for r in last]
+    if len(vals) < 4 or any(v is None for v in vals):
+        return None
+    idx = [(r.get("fiscal_year") or 0) * 4 + (r.get("fiscal_quarter") or 0) for r in last]
+    if all(idx) and idx != list(range(idx[0], idx[0] + 4)):
+        return None
+    return sum(vals)
+
+
+def _consensus_growth(rows: List[Dict[str, Any]], estimates: Optional[List[Dict[str, Any]]]) -> tuple:
+    """Analyst consensus revenue for the coming quarters vs the same fiscal quarters a year earlier (SEC filings).
+    Same quarters on both sides, so seasonal swings (a strong holiday quarter, a weak winter one) cancel out."""
+    by_q = {(r.get("fiscal_year"), r.get("fiscal_quarter")): r.get("revenue") for r in rows}
+    est = ya = 0.0
+    used = []
+    for e in estimates or []:
+        prev = by_q.get((e.get("year", 0) - 1, e.get("quarter")))
+        if e.get("revenue_estimate") and prev and prev > 0:
+            est += e["revenue_estimate"]
+            ya += prev
+            used.append(f"Q{e['quarter']} FY{str(e['year'])[-2:]}")
+    return (_clamp(est / ya - 1, -0.5, 1.5) if ya else None), used
+
+
+def _latest_quarter_yoy(rows: List[Dict[str, Any]], metrics: Dict[str, Any]) -> Optional[float]:
+    """Latest reported quarter vs the same quarter a year earlier (SEC filings, else the provider's figure)."""
+    if rows:
+        last = rows[-1]
+        prev = next((r.get("revenue") for r in rows if r.get("fiscal_year") == (last.get("fiscal_year") or 0) - 1
+                     and r.get("fiscal_quarter") == last.get("fiscal_quarter")), None)
+        if last.get("revenue") and prev and prev > 0:
+            return _clamp(last["revenue"] / prev - 1, -0.5, 1.5)
+    q = metrics.get("revenue_growth_q_yoy")
+    return _clamp(q / 100, -0.5, 1.5) if q is not None else None
+
+
+def optiiq_value(price: float, metrics: Dict[str, Any], financials: List[Dict[str, Any]], sector: str = "", ticker: str = "",
+                 estimates: Optional[List[Dict[str, Any]]] = None, capex_history: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+    """Intrinsic value per share: company-specific, revenue-driven 10-year DCF (the user's DCF template).
+    1. Revenue (TTM). Year-1 growth = average of analyst consensus for the coming quarters vs the same quarters a year ago
+       and the latest reported quarter vs a year ago (without consensus: TTM growth and the latest quarter vs a year ago).
+       Same-quarter comparisons only, so seasonality doesn't skew it. -15% to +80%.
+    2. Growth fades toward 3.5% terminal growth: g_t = 3.5% + (g1 - 3.5%) x (1 - fade)^(t-1); fade = 20% (template),
+       faster for very high growth (up to 45%).
+    3. EBIT margin before stock-based pay (paid in shares, not cash -- the same basis as reported free cash flow) moves from
+       today's level toward a stable margin (halfway to the 5-year average, shifted by the same add-back, and at least 60%
+       of today's) at the same fade. A negative last-12-month margin with a positive 5-year average (a one-off charge)
+       starts halfway between the two.
+    4. FCFF = EBIT x (1 - 21% tax) + D&A - capex - change in working capital (receivables + inventory - payables -
+       deferred revenue, as a share of the revenue increase). Capex moves from today's share of revenue toward the company's
+       own long-run level (median of up to 10 fiscal years of 10-K filings) at the same fade; with under 3 years of history,
+       capex above 1.1x D&A (a build-out) converges toward it.
+    5. Discount at WACC (CAPM cost of equity, after-tax cost of debt, market-cap/debt weights), end-of-year.
+       Terminal value = year-10 FCFF x (1 + 3.5%) / (WACC - 3.5%).
+    6. Enterprise value + cash & short-term investments - debt = equity value; / shares = value per share.
+       Bear/bull: Year-1 growth -8/+5 points and WACC +1.5/-0.5 points.
     Banks/insurers/brokers and regulated utilities: excess-return model, book value x (ROE - g) / (cost of equity - g).
     Values more than 3x or under 1/4 of the price are flagged confidence="low"."""
     mc = metrics.get("market_cap")
@@ -1028,30 +1144,14 @@ def optiiq_value(price: float, metrics: Dict[str, Any], financials: List[Dict[st
     q = rows[-4:]
     fcfs = [x["free_cash_flow"] for x in q if x.get("free_cash_flow") is not None]
     fcf = sum(fcfs) * 4 / len(fcfs) if fcfs else None
-    fcf_src = "SEC filings, last 4 quarters"
     if (metrics.get("pfcf_ttm") or 0) > 0:  # standardized TTM free cash flow (catches capex filed under industry-specific lines)
-        fcf, fcf_src = mc / metrics["pfcf_ttm"], "TTM, standardized from SEC filings"
+        fcf = mc / metrics["pfcf_ttm"]
     nis = [x["net_income"] for x in q if x.get("net_income") is not None]
     ni = sum(nis) if len(nis) == 4 else (metrics.get("eps_ttm") or 0) * shares
-    ocfs = [x["operating_cash_flow"] for x in q if x.get("operating_cash_flow") is not None]
-    ocf = sum(ocfs) * 4 / len(ocfs) if ocfs else None
-    if ocf is None and (metrics.get("pcf_ttm") or 0) > 0:
-        ocf = mc / metrics["pcf_ttm"]
 
     beta_raw = metrics.get("beta")
     beta = round(_clamp(0.67 * (beta_raw if beta_raw else 1.0) + 0.33, 0.8, 1.5), 2)  # Blume-adjusted (like Bloomberg), 0.8-1.5
     ke = RISK_FREE + beta * MRP
-    gin = {"Revenue growth (TTM)": metrics.get("revenue_growth_ttm"), "Revenue growth (3y)": metrics.get("revenue_growth_3y"),
-           "Revenue growth (5y)": metrics.get("revenue_growth_5y"), "EPS growth (3y)": metrics.get("eps_growth_3y"),
-           "EPS growth (5y)": metrics.get("eps_growth_5y")}
-    graw = _median([v for v in gin.values() if v is not None])
-    rev_med = _median([v for k, v in gin.items() if v is not None and k.startswith("Revenue")])
-    g1 = graw / 100 if graw is not None else 0.05
-    if rev_med is not None:  # EPS jumps from a low base can't carry growth far above sales growth
-        g1 = min(g1, rev_med / 100 + 0.05)
-    g1 = _clamp(g1, 0.0, 0.25)
-    lt = round(_clamp(0.03 + (g1 - 0.05) / 0.15 * 0.02, 0.03, 0.05), 4)  # 3% at <=5% growth, 5% at >=20%
-    g2 = max(g1 / 2, lt)
     discount = {"risk_free": RISK_FREE, "beta_raw": round(beta_raw, 2) if beta_raw else None, "beta": beta, "mrp": MRP,
                 "cost_of_equity": round(ke, 4)}
 
@@ -1105,68 +1205,142 @@ def optiiq_value(price: float, metrics: Dict[str, Any], financials: List[Dict[st
         de, bvps = metrics.get("debt_to_equity_q"), metrics.get("book_value_per_share_q")
         debt = de * bvps * shares if de and bvps and bvps > 0 else 0.0
         debt_src = "debt-to-equity x book value"
-    wd = debt / (debt + mc) if debt > 0 else 0.0
-    kd = RISK_FREE + DEBT_SPREAD
-    # cash flow to the firm: debt is subtracted at the end, so add back the after-tax interest it costs
-    interest = debt * kd * (1 - TAX_RATE)
 
-    roe = (metrics.get("roe_ttm") or 0) / 100
-    # steady-state cash flow: earnings (capped at operating cash flow, so one-off investment gains don't count)
-    # plus after-tax interest, left after reinvesting for long-term growth
-    earn = min(ni, ocf) if ocf is not None else ni
-    steady = (earn + interest) * (1 - lt / max(roe, 0.12)) if earn > 0 else 0.0
-    fcff = fcf + interest if fcf is not None else None
-    if fcff is None:
-        start = normal = steady
-        cf_note = "No cash-flow filings, so steady-state earnings are used."
-    elif fcff >= 0.9 * steady:
-        start = normal = fcff
-        cf_note = "Free cash flow (TTM) grows from here."
-    else:
-        start, normal = fcff, steady
-        cf_note = "Free cash flow is well below steady-state earnings (heavy investment), so it converges to them by year 5."
-    if interest > 0:
-        cf_note += " Cash flows include after-tax interest, because debt is subtracted at the end."
-    if normal <= 0:
+    # 1. revenue (TTM)
+    rev = _ttm(rows, "revenue")
+    rev_src = "SEC filings, last 4 quarters"
+    if not rev and metrics.get("revenue_ps_ttm"):
+        rev, rev_src = metrics["revenue_ps_ttm"] * shares, "revenue per share (TTM) x shares"
+    if not rev or rev <= 0:
         return done(None, {})
 
-    def wacc_for(k: float) -> float:
-        return max(k * (1 - wd) + kd * (1 - TAX_RATE) * wd, lt + 0.035, 0.07)
+    # 2. Year-1 revenue growth: analyst consensus for the coming quarters vs the same quarters a year ago (or the last
+    #    12 months' growth without consensus), averaged with the latest reported quarter vs a year ago
+    c_yoy, fwd_quarters = _consensus_growth(rows, estimates)
+    ttm_g = metrics.get("revenue_growth_ttm")
+    gin = [("Consensus, coming quarters vs a year ago", c_yoy) if c_yoy is not None else
+           ("Last 12 months vs the 12 before", ttm_g / 100 if ttm_g is not None else None),
+           ("Latest quarter vs a year ago", _latest_quarter_yoy(rows, metrics))]
+    gin = [(k, v) for k, v in gin if v is not None]
+    if gin:
+        g1 = sum(v for _, v in gin) / len(gin)
+    else:
+        hist = [metrics.get(k) for k in ("revenue_growth_3y", "revenue_growth_5y") if metrics.get(k) is not None]
+        g1 = _median(hist) / 100 if hist else 0.05
+        gin = [("Revenue growth, 3-5 year average", g1)] if hist else []
+    g1 = _clamp(g1, -0.15, 0.8)
+    # fast growth fades faster: a 20% yearly fade (the template default), up to 45% for very high growth
+    fade = round(_clamp(BASE_FADE + max(0.0, g1 - 0.15) * 0.5, BASE_FADE, 0.45), 3)
 
-    def dcf(w: float) -> Dict[str, Any]:
-        years, gf, pv_sum = [], 1.0, 0.0
+    # 3. reinvestment: D&A, capex (heavy build-outs converge toward maintenance levels) and working capital
+    oi = _ttm(rows, "operating_income")
+    m_rep = metrics["operating_margin_ttm"] / 100 if metrics.get("operating_margin_ttm") is not None else (oi / rev if oi is not None else None)
+    da = _ttm(rows, "dep_amort")
+    da_pct = da / rev if da is not None else None
+    if metrics.get("ebitda_ps_ttm") and metrics.get("revenue_ps_ttm") and m_rep is not None:  # EBITDA - EBIT catches amortization a filing tag misses
+        da_alt = metrics["ebitda_ps_ttm"] / metrics["revenue_ps_ttm"] - m_rep
+        da_pct = max(da_pct or 0.0, da_alt) if da_alt > 0 else da_pct
+    da_pct = _clamp(da_pct if da_pct is not None else 0.04, 0.0, 0.25)
+    cx_pct, cx_src = None, "SEC filings, last 4 quarters"
+    if (metrics.get("pcf_ttm") or 0) > 0 and (metrics.get("pfcf_ttm") or 0) > 0:  # standardized TTM (catches industry-specific capex lines)
+        cx_pct, cx_src = (mc / metrics["pcf_ttm"] - mc / metrics["pfcf_ttm"]) / rev, "TTM, standardized from SEC filings"
+    if cx_pct is None or cx_pct < 0:
+        cx = _ttm(rows, "capex")
+        cx_pct, cx_src = (cx / rev, "SEC filings, last 4 quarters") if cx is not None else (0.06, "template default")
+    cx_pct = _clamp(cx_pct, 0.0, 0.6)
+    cx_hist = [{"year": h["year"], "pct": h["capex"] / h["revenue"]} for h in (capex_history or [])
+               if h.get("revenue") and h["revenue"] > 0 and h.get("capex") is not None][-10:]
+    if len(cx_hist) >= 3:  # the company's own long-run capex level (cycles and build-outs included)
+        cx_target = _clamp(_median([h["pct"] for h in cx_hist]), 0.0, 0.6)
+        cx_rule = f"Moves toward its own {len(cx_hist)}-year median ({cx_hist[0]['year']}-{cx_hist[-1]['year']} 10-K filings)"
+    else:
+        cx_target = min(cx_pct, 1.1 * da_pct) if da_pct > 0 else cx_pct
+        cx_rule = "Under 3 years of filings: a build-out above 1.1x D&A eases toward it"
+    wc = next((r for r in reversed(rows) if r.get("receivables") is not None or r.get("inventory") is not None), None)
+    if wc:  # trade working capital: receivables + inventory - payables - prepaid subscriptions (deferred revenue)
+        nwc = (wc.get("receivables") or 0.0) + (wc.get("inventory") or 0.0) - (wc.get("payables") or 0.0) - (wc.get("deferred_revenue") or 0.0)
+        nwc_pct = _clamp(nwc / rev, 0.0, 0.3)
+    else:
+        nwc_pct = 0.03
+
+    # 4. operating (EBIT) margin before stock-based pay (paid in shares, not cash -- the same basis as reported free cash flow),
+    #    moving from today's level toward a stable margin halfway to its 5-year average (shifted by the same add-back)
+    m_hist = metrics.get("operating_margin_5y") if metrics.get("operating_margin_5y") is not None else metrics.get("operating_margin_annual")
+    m_hist = m_hist / 100 if m_hist is not None else None
+    sbc = _ttm(rows, "sbc")
+    sbc_pct = _clamp(sbc / rev, 0.0, 0.4) if sbc is not None and sbc > 0 else 0.0
+    m0 = m_rep + sbc_pct if m_rep is not None else None
+    if m_hist is not None:
+        m_hist += sbc_pct
+    if m0 is not None and m0 <= 0 and m_hist is not None and m_hist > 0:  # a one-off charge (e.g. impairment) in the last 12 months
+        m0 = (m0 + m_hist) / 2
+    if m0 is None or m0 <= 0:
+        return {"available": False, "reason": "Operating margin isn't positive yet, so a cash-flow DCF isn't meaningful"}
+    m_stable = _clamp(max((m0 + m_hist) / 2, 0.6 * m0) if m_hist is not None else m0, 0.01, 0.6)
+
+    # 5. discount rate: WACC from CAPM cost of equity and after-tax cost of debt
+    wd = debt / (debt + mc) if debt > 0 else 0.0
+    kd = RISK_FREE + DEBT_SPREAD
+
+    def wacc_for(k: float) -> float:
+        return max(k * (1 - wd) + kd * (1 - TAX_RATE) * wd, TERMINAL_GROWTH + 0.035, 0.07)
+
+    def model(g_start: float, w: float) -> Dict[str, Any]:
+        years, pv_sum, prev, m, cxp = [], 0.0, rev, m0, cx_pct
         for t in range(1, 11):
-            gf *= 1 + (g1 if t <= 5 else g2)
-            cf = (start + (normal - start) * min(t, 5) / 5) * gf
-            pv = cf / (1 + w) ** (t - 0.5)
+            g = TERMINAL_GROWTH + (g_start - TERMINAL_GROWTH) * (1 - fade) ** (t - 1)
+            r = prev * (1 + g)
+            if t > 1:
+                m += (m_stable - m) * fade
+                cxp += (cx_target - cxp) * fade
+            ebit = r * m
+            fcff = ebit * (1 - TAX_RATE) + r * da_pct - r * cxp - (r - prev) * nwc_pct
+            pv = fcff / (1 + w) ** t
             pv_sum += pv
-            years.append((t, cf, pv))
-        tv = years[-1][1] * (1 + lt) / (w - lt)
+            years.append({"t": t, "growth": g, "revenue": r, "margin": m, "ebit": ebit, "fcff": fcff, "pv": pv})
+            prev = r
+        tv = years[-1]["fcff"] * (1 + TERMINAL_GROWTH) / (w - TERMINAL_GROWTH)
         pv_tv = tv / (1 + w) ** 10
-        return {"years": years, "pv_sum": pv_sum, "tv": tv, "pv_tv": pv_tv, "ops": pv_sum + pv_tv,
+        return {"years": years, "pv_sum": pv_sum, "tv": tv, "pv_tv": pv_tv, "ev": pv_sum + pv_tv,
                 "per_share": (pv_sum + pv_tv + cash - debt) / shares}
 
     w_raw = ke * (1 - wd) + kd * (1 - TAX_RATE) * wd
     w = wacc_for(ke)
-    d = dcf(w)
+    d = model(g1, w)
+    scen = {}
+    for name, (dg, dw) in SCENARIOS.items():
+        ws = max(w + dw, TERMINAL_GROWTH + 0.035, 0.07)  # same floors as the base case
+        v = model(g1 + dg, ws)["per_share"]
+        scen[name] = {"growth_year1": round(g1 + dg, 4), "wacc": round(ws, 4),
+                      "value": round(v, 2) if v > 0 else None, "upside_pct": round((v / price - 1) * 100, 1) if v > 0 else None}
+    scen["base"] = {"growth_year1": round(g1, 4), "wacc": round(w, 4), "value": round(d["per_share"], 2),
+                    "upside_pct": round((d["per_share"] / price - 1) * 100, 1)}
     y0 = int(str(rows[-1].get("end_date") or "")[:4] or 0) if rows else 0
     y0 = y0 or datetime.now(timezone.utc).year - 1
     return done(d["per_share"], {
         "model": "dcf",
-        "method": "10-year free-cash-flow DCF: WACC discount (CAPM), terminal value, plus cash minus debt, divided by shares.",
-        "fcf_ttm": round(fcf) if fcf is not None else None, "fcf_source": fcf_src, "net_income_ttm": round(ni) if ni else None,
-        "interest_addback": round(interest), "start_cf": round(start), "steady_cf": round(normal), "cf_note": cf_note,
-        "growth": {"stage1": round(g1, 4), "stage2": round(g2, 4), "long_term": lt, "stage2_floored": g2 > g1 / 2,
-                   "median_raw": round(graw / 100, 4) if graw is not None else None,
-                   "capped_by_revenue": rev_med is not None and graw is not None and graw / 100 > rev_med / 100 + 0.05,
-                   "inputs": [{"label": k, "pct": round(v, 1)} for k, v in gin.items() if v is not None]},
+        "method": ("10-year revenue-driven DCF: revenue growth starts from analyst consensus and recent growth, then fades toward "
+                   f"{TERMINAL_GROWTH * 100:.1f}%; operating margin moves toward a stable level; free cash flow to the firm = "
+                   "after-tax EBIT + D&A - capex - working capital; discounted at WACC (CAPM) with a terminal value, plus cash minus debt, "
+                   "divided by shares."),
+        "revenue_ttm": round(rev), "revenue_source": rev_src,
+        "growth": {"year1": round(g1, 4), "terminal": TERMINAL_GROWTH, "fade": fade, "consensus_quarters": fwd_quarters,
+                   "inputs": [{"label": k, "pct": round(v * 100, 1)} for k, v in gin]},
+        "margin": {"initial": round(m0, 4), "stable": round(m_stable, 4), "reported": round(m_rep, 4) if m_rep is not None else None,
+                   "stock_pay_addback": round(sbc_pct, 4), "history_5y": round(m_hist, 4) if m_hist is not None else None},
+        "reinvestment": {"tax_rate": TAX_RATE, "da_pct": round(da_pct, 4), "capex_pct": round(cx_pct, 4), "capex_target_pct": round(cx_target, 4),
+                         "capex_source": cx_src, "capex_rule": cx_rule,
+                         "capex_history": [{"year": h["year"], "pct": round(h["pct"], 4)} for h in cx_hist],
+                         "nwc_pct_of_revenue_change": round(nwc_pct, 4)},
         "discount": {**discount, "cost_of_debt": round(kd, 4), "tax_rate": TAX_RATE, "cost_of_debt_after_tax": round(kd * (1 - TAX_RATE), 4),
                      "weight_equity": round(1 - wd, 4), "weight_debt": round(wd, 4), "wacc": round(w, 4),
                      "wacc_floored": w > w_raw + 1e-9, "wacc_formula": round(w_raw, 4)},
-        "years": [{"year": y0 + t, "t": t, "fcf": round(cf), "pv": round(pv)} for t, cf, pv in d["years"]],
+        "years": [{"year": y0 + y["t"], "t": y["t"], "growth": round(y["growth"], 4), "revenue": round(y["revenue"]),
+                   "ebit_margin": round(y["margin"], 4), "fcff": round(y["fcff"]), "pv": round(y["pv"])} for y in d["years"]],
         "pv_cash_flows": round(d["pv_sum"]), "terminal_value": round(d["tv"]), "pv_terminal": round(d["pv_tv"]),
-        "terminal_share_pct": round(d["pv_tv"] / d["ops"] * 100, 1) if d["ops"] > 0 else None,
-        "value_of_operations": round(d["ops"]), "cash": round(cash), "cash_source": cash_src, "debt": round(debt), "debt_source": debt_src,
-        "equity_value": round(d["ops"] + cash - debt), "shares": round(shares), "market_cap": round(mc),
-        "beta_check": check(lambda k: dcf(wacc_for(k))["per_share"]),
+        "terminal_share_pct": round(d["pv_tv"] / d["ev"] * 100, 1) if d["ev"] > 0 else None,
+        "value_of_operations": round(d["ev"]), "cash": round(cash), "cash_source": cash_src, "debt": round(debt), "debt_source": debt_src,
+        "equity_value": round(d["ev"] + cash - debt), "shares": round(shares), "market_cap": round(mc),
+        "scenarios": scen,
+        "beta_check": check(lambda k: model(g1, wacc_for(k))["per_share"]),
     })

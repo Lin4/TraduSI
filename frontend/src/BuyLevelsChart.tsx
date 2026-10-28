@@ -69,6 +69,7 @@ export function BuyLevelsChart({ r }: { r: any }) {
   const y = (v: number) => PAD_T + ((hi - v) / (hi - lo || 1)) * (H - PAD_T - PAD_B);
   const x = (i: number) => (i / (pts.length - 1)) * w;
   const last = closes[closes.length - 1];
+  const live: number = r.price ?? last; // the legend quotes the live price, like the OptiIQ card
   const idx = new Map(pts.map((p, i) => [p[0], i]));
   const fibs: any[] = layers.fib ? (ov.fib?.levels || []).filter((f: any) => f.price > lo && f.price < hi) : [];
   const revs: any[] = layers.rev ? (ov.reversals || []).filter((p: any) => idx.has(p[0])) : [];
@@ -139,7 +140,7 @@ export function BuyLevelsChart({ r }: { r: any }) {
         ) : null}
       </View>
       <View style={s.legend}>
-        <Key color={colors.brandPrimary} text={`Price ${usd(last)}`} />
+        <Key color={colors.brandPrimary} text={`Price ${usd(live)}`} />
         {iv ? <Key color={colors.chartValue} text={r.intrinsic_line?.source || "Intrinsic value"} /> : null}
         <Key color={colors.valueUnder} text="Buy levels" />
         {layers.avg ? <Key color={colors.chartMa50} text="50-day avg" /> : null}

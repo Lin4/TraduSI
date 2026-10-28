@@ -11,6 +11,7 @@ import { Stat } from "@/src/screen";
 import { colors, spacing, radius, themedStyles, useTheme } from "@/src/theme";
 import { usePlan, LockedFeature } from "@/src/plans";
 import { CalibrationChart, EquityCurve, money } from "@/src/quantcharts";
+import { WeeklyReport } from "@/src/WeeklyReport";
 
 type Tab = "live" | "backtest";
 
@@ -56,6 +57,7 @@ export default function TrackRecord() {
         {!data ? <LoadingSkeleton lines={6} /> : tab === "live" ? (
           <View testID="track-live">
             <Summary s={live.stats} />
+            <WeeklyReport w={live.weekly} />
             <Text style={styles.method}>{live.method}</Text>
             <Buckets rows={live.buckets} />
             <Accuracy a={live.accuracy} />
