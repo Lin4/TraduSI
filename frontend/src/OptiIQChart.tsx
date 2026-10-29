@@ -48,6 +48,9 @@ export function OptiIQChart({ o }: { o: any }) {
         </>
       )}
       {o.confidence === "low" ? <Text style={s.warn}>{o.confidence_note}</Text> : null}
+      {o.inputs?.listing_scale != null && o.inputs.listing_scale !== 1 ? (
+        <Text testID="optiiq-listing-note" style={s.small}>Company figures are reported in another currency or per home-market share; they are converted to this listing&apos;s price.</Text>
+      ) : null}
 
       {methods.length && price ? (
         <>

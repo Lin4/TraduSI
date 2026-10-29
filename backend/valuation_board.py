@@ -15,8 +15,9 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 import httpx
-from fastapi import Header, HTTPException
+from fastapi import Header
 from pymongo import UpdateOne
+from pymongo.errors import DuplicateKeyError
 
 import market
 import tradier
@@ -34,7 +35,6 @@ BUCKETS = [
 ]
 FUND_TTL = 86400.0        # fundamentals refresh once a day
 RETRY_TTL = 3600.0        # stocks with missing data are retried after an hour
-BOARD_FINNHUB_CAP = 30    # board pauses while the last minute's Finnhub calls exceed this (budget 55/min)
 PRICE_EVERY = 600
 MODEL_V = 8               # OptiIQ model version the stored inputs were collected for (average of 9 valuation methods)
 FIN_FIELDS = ("label", "end_date", "fiscal_year", "fiscal_quarter", "revenue", "operating_income", "dep_amort", "sbc", "capex",
@@ -83,7 +83,8 @@ def optiiq_of(doc: Dict[str, Any], price: float) -> Dict[str, Any]:
     rows = [dict(r) for r in doc.get("financials") or []]
     metrics = doc.get("metrics") or {}
     fill_balance_gaps(rows, metrics, price)
-    return optiiq_value(price, metrics, rows, doc.get("sector") or "", doc.get("ticker") or doc.get("_id") or "", doc.get("estimates"))
+    return optiiq_value(price, metrics, rows, doc.get("sector") or "", doc.get("ticker") or doc.get("_id") or "", doc.get("estimates"),
+                        doc.get("currency") or "USD")
 
 
 def evaluate(doc: Dict[str, Any], price: float) -> Dict[str, Any]:
@@ -297,8 +298,22 @@ def buy_plan(candles: List[Dict[str, float]], price: float, intrinsic: Optional[
 
 
 def register(api_router, *, db, get_user: Callable, send_push: Callable, market_open_now: Callable, logger) -> Dict[str, Callable]:
-    col = db.valuation_board
+    # Own collection: older app versions still write the legacy `valuation_board` collection in this shared database with
+    # their own model, which would otherwise overwrite these inputs and values.
+    col = db.optiiq_board
     cache: Dict[str, Any] = {}
+    instance = uuid.uuid4().hex
+
+    async def lead() -> bool:
+        """The preview and published servers share this database and the data-provider key: only one runs the daily
+        company-data refresh at a time (a lease renewed per stock, free again 3 minutes after its holder stops)."""
+        now = time.time()
+        try:
+            await db.locks.find_one_and_update({"_id": "board_refresh", "$or": [{"owner": instance}, {"until": {"$lt": now}}]},
+                                               {"$set": {"owner": instance, "until": now + 180}}, upsert=True)
+            return True
+        except DuplicateKeyError:
+            return False
 
     async def refresh_fundamentals(client: httpx.AsyncClient, s: Dict[str, str], price: Optional[float]) -> None:
         tk = s["ticker"]
@@ -322,17 +337,22 @@ def register(api_router, *, db, get_user: Callable, send_push: Callable, market_
     async def fundamentals_loop():
         await asyncio.sleep(45)
         while True:
+            pause = 900
             try:
                 now = time.time()
                 # stocks saved by an older OptiIQ model are refreshed first, with the inputs the current model needs
                 seen = {d["_id"]: d.get("fund_ts", 0) if is_current(d) else 0
                         async for d in col.find({}, {"fund_ts": 1, "model_v": 1, "metrics.mean_years": 1})}
                 todo = sorted((s for s in SP500 if now - seen.get(s["ticker"], 0) > FUND_TTL), key=lambda s: seen.get(s["ticker"], 0))
-                if todo:
+                if todo and not await lead():
+                    pause = 60  # another server (or the one this restart replaced) holds the refresh: check again soon
+                elif todo:
                     async with httpx.AsyncClient() as client:
                         prices = await tradier.quotes(client, [s["ticker"] for s in todo])
                         for s in todo:
-                            while market.recent_calls("finnhub.io") > BOARD_FINNHUB_CAP:
+                            if not await lead():
+                                break
+                            while market.recent_calls("finnhub.io") > market.BACKGROUND_CAP:
                                 await asyncio.sleep(2)
                             try:
                                 await refresh_fundamentals(client, s, prices.get(s["ticker"]))
@@ -342,7 +362,7 @@ def register(api_router, *, db, get_user: Callable, send_push: Callable, market_
                             await asyncio.sleep(1.5)
             except Exception as ex:
                 logger.warning(f"board loop: {ex}")
-            await asyncio.sleep(900)
+            await asyncio.sleep(pause)
 
     async def price_loop():
         await asyncio.sleep(60)
@@ -442,17 +462,6 @@ def register(api_router, *, db, get_user: Callable, send_push: Callable, market_
         }
         cache["board"] = (time.time(), out)
         return out
-
-    @api_router.get("/valuation/board/{ticker}")
-    async def valuation_board_stock(ticker: str, authorization: Optional[str] = Header(default=None)):
-        """One stock's 9-method valuation chart from the board's stored company data (no provider calls)."""
-        await get_user(authorization)
-        tk = ticker.upper().strip()
-        doc = await col.find_one({"_id": tk})
-        if not doc or not doc.get("price") or not is_current(doc):
-            raise HTTPException(status_code=404, detail="This stock's valuation is still being prepared")
-        return {"ticker": tk, "name": doc.get("name"), "sector": doc.get("sector"), "price": doc["price"],
-                "price_ts": doc.get("price_ts"), "optiiq": optiiq_of(doc, doc["price"])}
 
     return {"fundamentals_loop": fundamentals_loop, "price_loop": price_loop, "price_alert_loop": price_alert_loop,
             "check_price_alerts": check_price_alerts}

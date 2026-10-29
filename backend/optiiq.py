@@ -49,6 +49,32 @@ def is_bank_or_insurer(ticker: str, sector: str) -> bool:
     return ticker.upper() in BANKS_INSURERS or "bank" in s or "insurance" in s
 
 
+LISTING_MONEY = ("market_cap", "eps_ttm", "revenue_ps_ttm", "book_value_per_share_q", "cash_per_share_q", "ocf_ps_ttm", "ebitda_ps_ttm")
+DISPLAY_MONEY = LISTING_MONEY + ("enterprise_value", "52w_high", "52w_low")
+
+
+def listing_scale(price: float, metrics: Dict[str, Any], currency: Optional[str]) -> Optional[float]:
+    """1 for companies reporting in US dollars. A foreign company's US listing (e.g. SKHY: SK hynix figures in Korean won
+    per home-market share) gets the factor between this quote and the home price its own figures imply (P/E x EPS, else
+    P/S x sales per share, else P/B x book value): exchange rate and ADR ratio in one, so every method is valued in this
+    listing's terms. None when the figures can't be converted."""
+    if not currency or currency.upper() == "USD":
+        return 1.0
+    for ratio, per_share in (("pe_ttm", "eps_ttm"), ("ps_ttm", "revenue_ps_ttm"), ("price_to_book", "book_value_per_share_q")):
+        r, v = metrics.get(ratio), metrics.get(per_share)
+        if r and v and r > 0 and v > 0:
+            return price / (r * v)
+    return None
+
+
+def in_listing_terms(metrics: Dict[str, Any], price: float, currency: Optional[str], keys=LISTING_MONEY) -> tuple:
+    """(metrics with the money figures converted to this listing, factor)."""
+    k = listing_scale(price, metrics, currency)
+    if k is None or k == 1.0:
+        return metrics, k
+    return {**metrics, **{key: metrics[key] * k for key in keys if isinstance(metrics.get(key), (int, float))}}, k
+
+
 def _clamp(x: float, lo: float, hi: float) -> float:
     return min(max(x, lo), hi)
 
@@ -129,10 +155,16 @@ def _cash_debt(rows: List[Dict[str, Any]], metrics: Dict[str, Any], shares: floa
 
 
 def optiiq_value(price: float, metrics: Dict[str, Any], financials: List[Dict[str, Any]], sector: str = "", ticker: str = "",
-                 estimates: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+                 estimates: Optional[List[Dict[str, Any]]] = None, currency: Optional[str] = "USD") -> Dict[str, Any]:
     mc = metrics.get("market_cap")
     if not price or not mc:
         return {"available": False, "reason": "Market data unavailable"}
+    metrics, k = in_listing_terms(metrics, price, currency)
+    if k is None:
+        return {"available": False, "reason": f"Company figures are in {currency} and couldn't be converted to this listing's price"}
+    if k != 1.0:  # converted from another currency / share unit; filings and estimates (home currency) are skipped
+        financials, estimates = [], []
+        mc = metrics["market_cap"]
     eps = metrics.get("eps_ttm")
     if (eps or 0) > price:  # P/E below 1: per-share data doesn't match this share price (e.g. share-class mix-up)
         return {"available": False, "reason": "Company data looks inconsistent, so no value is shown"}
@@ -226,7 +258,7 @@ def optiiq_value(price: float, metrics: Dict[str, Any], financials: List[Dict[st
             "inputs": {"growth": {"years_1_5": round(g1, 6), "years_6_10": round(g2, 6), "years_11_20": round(g3, 6),
                                   "terminal": min(TERMINAL_GROWTH, g2), "inputs": growth_inputs},
                        "discount_rate": r, "beta": metrics.get("beta"), "cash": round(cash), "debt": round(debt), "shares": round(shares),
-                       "net_cash_ps": round(net_cash_ps, 2), "dividend_yield": dy}}
+                       "net_cash_ps": round(net_cash_ps, 2), "dividend_yield": dy, "listing_scale": k}}
     if not vals:
         return {"available": False, "reason": "Not enough company data for any valuation method", **base}
     avg = sum(vals) / len(vals)

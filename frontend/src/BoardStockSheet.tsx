@@ -18,7 +18,7 @@ export function BoardStockSheet({ ticker, onClose, onAnalyze }: { ticker: string
     if (!ticker) return;
     setData(null);
     setErr("");
-    api(`/api/valuation/board/${ticker}`).then(setData).catch((e) => setErr(e.message || "Couldn't load this valuation"));
+    api(`/api/valuation/optiiq/${ticker}`).then(setData).catch((e) => setErr(e.message || "Couldn't load this valuation"));
   }, [ticker]);
 
   return (

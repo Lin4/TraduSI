@@ -95,6 +95,28 @@ class TestNineMethods:
         o = optiiq_value(PRICE, metrics(), [], sector, ticker)
         assert o["count"] == 9 and not o["bank_or_insurer"]
 
+    def test_foreign_listing_converted_to_listing_price(self):
+        """SKHY-style: per-share figures in another currency (x10,000 here) are scaled to the quote; values match the home listing's."""
+        home = optiiq_value(PRICE, metrics(), [])
+        fx = 10_000.0
+        m = metrics(market_cap=100e9 * fx, eps_ttm=5.0 * fx, revenue_ps_ttm=40.0 * fx, book_value_per_share_q=20.0 * fx, pe_ttm=20.0, ps_ttm=2.5)
+        o = optiiq_value(PRICE, m, [], currency="KRW")
+        assert o["inputs"]["listing_scale"] == pytest.approx(1 / fx)
+        assert o["available"] and o["value"] == pytest.approx(home["value"], abs=0.01)
+
+    def test_euro_listing_converted_even_when_close(self):
+        o = optiiq_value(PRICE, metrics(pe_ttm=17.4), [], currency="EUR")  # home price 87 EUR vs $100 listing
+        assert o["inputs"]["listing_scale"] == pytest.approx(100 / 87.0)
+
+    @pytest.mark.parametrize("pe", [22.0, 76.0])  # US data never converted, even with an odd provider P/E (IBKR, CVNA)
+    def test_us_listing_not_scaled(self, pe):
+        o = optiiq_value(PRICE, metrics(pe_ttm=pe), [], currency="USD")
+        assert o["inputs"]["listing_scale"] == 1.0
+
+    def test_unconvertible_foreign_figures_unavailable(self):
+        o = optiiq_value(PRICE, metrics(pe_ttm=None, ps_ttm=None), [], currency="JPY")
+        assert not o["available"] and "JPY" in o["reason"]
+
     def test_average_below_zero_unavailable(self):
         o = optiiq_value(PRICE, metrics(eps_ttm=-5.0, pcf_ttm=-20.0, pfcf_ttm=-10.0, book_value_per_share_q=-10.0, revenue_growth_5y=-5.0,
                                         revenue_growth_ttm=-20.0, eps_growth_5y=-20.0, revenue_growth_q_yoy=-20.0), [])

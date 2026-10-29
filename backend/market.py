@@ -39,8 +39,13 @@ def _stale(key: str):
 
 # Free-tier request budgets per minute. Over budget -> the call is skipped and callers fall back to cached data.
 _RATE = {"api.polygon.io": 5, "finnhub.io": 55, "alphavantage.co": 5}
+BACKGROUND_CAP = 30  # background jobs pause while the last minute's Finnhub calls exceed this, leaving the rest for users
 _calls: Dict[str, List[float]] = {}
 CALL_COUNTS: Dict[str, int] = {}
+_inflight: Dict[str, "asyncio.Future"] = {}
+_forbidden: set = set()  # endpoints that answered 403 (not in the plan, e.g. price targets) and never 200
+_allowed: set = set()
+_skip_logged: Dict[str, float] = {}
 
 
 def _host(url: str) -> Optional[str]:
@@ -55,6 +60,9 @@ def _slot(url: str) -> bool:
     q = [t for t in _calls.get(h, []) if now - t < 61]
     _calls[h] = q
     if len(q) >= _RATE[h]:
+        if now - _skip_logged.get(h, 0) > 60:
+            _skip_logged[h] = now
+            logger.warning(f"{h}: {len(q)} calls in the last minute, skipping calls until the budget frees up")
         return False
     q.append(now)
     CALL_COUNTS[h] = CALL_COUNTS.get(h, 0) + 1
@@ -68,6 +76,26 @@ def recent_calls(host: str) -> int:
 
 
 async def _get(client: httpx.AsyncClient, url: str, params: dict | None = None) -> Optional[dict]:
+    """GET JSON. Identical requests already in flight share one call (e.g. Analyze's quick OptiIQ card and the full
+    analysis ask for the same company data at the same moment)."""
+    if url in _forbidden and url not in _allowed:  # endpoint not in the provider plan: don't spend the rate budget on it
+        return None
+    key = url + "?" + "&".join(f"{k}={v}" for k, v in sorted((params or {}).items()))
+    if key in _inflight:
+        return await asyncio.shield(_inflight[key])
+    fut = asyncio.get_running_loop().create_future()
+    _inflight[key] = fut
+    res = None
+    try:
+        res = await _fetch(client, url, params)
+        return res
+    finally:
+        _inflight.pop(key, None)
+        if not fut.done():
+            fut.set_result(res)
+
+
+async def _fetch(client: httpx.AsyncClient, url: str, params: dict | None = None) -> Optional[dict]:
     if not _slot(url):
         return None
     try:
@@ -75,8 +103,11 @@ async def _get(client: httpx.AsyncClient, url: str, params: dict | None = None) 
         if r.status_code != 200:
             if r.status_code == 429 and _host(url):  # provider says slow down -> spend the rest of this minute's budget
                 _calls[_host(url)] = [time.time()] * _RATE[_host(url)]
+            if r.status_code == 403:
+                _forbidden.add(url)
             logger.warning(f"GET {url} -> {r.status_code} {r.text[:120]}")
             return None
+        _allowed.add(url)
         return r.json()
     except Exception as e:
         logger.warning(f"GET {url} failed: {e}")
@@ -248,8 +279,10 @@ async def get_profile(client: httpx.AsyncClient, ticker: str) -> Dict[str, Any]:
         "country": data.get("country"),
         "exchange": data.get("exchange"),
         "ipo": data.get("ipo"),
+        "currency": data.get("currency"),  # reporting currency of the figures (a foreign company's home currency)
     }
-    _cache_set(key, prof)
+    if data:  # a rate-limited / empty answer isn't cached, so the real name and industry load next time
+        _cache_set(key, prof)
     return prof
 
 
@@ -360,7 +393,7 @@ def _report_items(rep: Dict[str, Any]) -> Dict[str, float]:
     items: Dict[str, float] = {}
     for sec in ("ic", "cf", "bs"):
         for it in (rep.get("report") or {}).get(sec) or []:
-            if isinstance(it.get("value"), (int, float)):
+            if isinstance(it, dict) and isinstance(it.get("value"), (int, float)):
                 items.setdefault(it["concept"], it["value"])
     return items
 

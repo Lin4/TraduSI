@@ -181,3 +181,22 @@
 - Frontend: src/OptiIQChart.tsx (Analyze > Long-term, testIDs optiiq-card / optiiq-unavailable, optiiq-value, optiiq-upside, optiiq-chart, optiiq-method-<key>, optiiq-method-<key>-value, optiiq-method-<key>-note on tap). Dashed price/value lines now drawn only across each bar (no longer over labels). src/BoardStockSheet.tsx: tap a stock chip on the S&P 500 board (vb-stock-<T>) -> sheet vb-sheet with the same chart, vb-sheet-close, vb-sheet-analyze runs the full long-term analysis.
 - Unit tests tests/test_optiiq_nine_unit.py (17 pass).
 - needs_retesting: false (iteration_35 + test_iter38 13/13 after board recompute fix)
+
+## Iteration 39 (main agent) - OptiIQ fast + never blank (user: "PLTR is empty ... taking too long to load")
+- Root cause PLTR blank: Finnhub rate limit (the published app runs OLD code on the same DB + same Finnhub key -> 429s) and the saved-copy fallback rejected docs the old app rewrote.
+- NEW GET /api/valuation/optiiq/{ticker} -> {ticker,name,sector,price,optiiq}: S&P 500 board names (is_current) -> board stored inputs + 1 quote call; non-board tickers -> saved optiiq_inputs (<12h) else live metrics+filings+estimates+profile in parallel; fallbacks: saved filings, then metrics-only; 404 for unknown ticker (ZZZZ). Replaces GET /api/valuation/board/{ticker} (removed); BoardStockSheet uses the new endpoint.
+- server.optiiq_for(): single OptiIQ source shared by the quick endpoint and POST /screener/stock-analysis (long) -> quick card and full analysis show the same value.
+- stock-analysis long: bundle + filings + 2y candles now fetched in parallel.
+- market._get: identical in-flight requests share one call; endpoints answering 403 (price-target, news-sentiment not in plan) are skipped afterwards.
+- valuation_board: Mongo lease (locks.board_refresh) so only one server (preview or published) runs the daily company-data refresh.
+- Frontend analyze.tsx Long-term: OptiIQ card appears first (testID optiiq-quick, ~0.5s) with "Loading buy levels, financials and the AI thesis…" while the full analysis loads (~7-9s), then the full result replaces it.
+- needs_retesting: false (iteration_37: regression 62/62; follow-ups fixed: currency-gated conversion, long-term page figures converted; test_iter39/40 34/34)
+
+## Iteration 40 (main agent) - fixes from iteration_36 report + SKHY
+- Board now uses its OWN collection `optiiq_board` (the published old app keeps writing legacy `valuation_board`); 376 current docs copied, the rest refreshed by our loop (lease locks.board_refresh). Board list + /api/valuation/optiiq read optiiq_board.
+- optiiq_for last-resort fallback: any saved/board doc with financials + market cap (fewer methods instead of "unavailable").
+- analyze.tsx run(): stale full results / loading flag / errors from an older run are ignored (lastRun ref check).
+- market.get_profile: failed (rate-limited) profile answers are not cached; _report_items ignores non-dict items (ECHO crash); log once a minute when the in-process Finnhub budget is exhausted.
+- NEW optiiq.listing_scale: foreign US listings whose provider figures are in another currency / per home-market share (SKHY = SK hynix in KRW, TSM in TWD) are converted to the listing price via the price their own figures imply (P/E x EPS, else P/S x sales/share, else P/B x book); gaps < 2x left alone; filings skipped for converted listings. inputs.listing_scale returned; UI note testID optiiq-listing-note.
+- SKHY: before "Company data looks inconsistent"; now ~$628 from 9 methods (low confidence, >3x price). TSM k≈0.18.
+- needs_retesting: false (iteration_37: regression 62/62; follow-ups fixed: currency-gated conversion, long-term page figures converted; test_iter39/40 34/34)

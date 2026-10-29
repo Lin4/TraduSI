@@ -32,7 +32,7 @@ from market import (
     UNIVERSE, UNIVERSE_INDEX, fetch_stock_bundle, get_quote, get_candles,
     sma as calc_sma, rsi as calc_rsi, support_resistance, detect_candle_patterns, detect_chart_patterns,
 )
-from market import get_earnings, get_metrics, get_quarterly_financials, get_peers
+from market import get_earnings, get_metrics, get_quarterly_financials, get_peers, get_profile
 import extras
 import billing
 import tradier
@@ -40,14 +40,14 @@ import chain
 import strategies
 import broadcasts
 import valuation_board
-from valuation_board import fill_balance_gaps, optiiq_sector, buy_plan, is_current, MODEL_V, FIN_FIELDS
+from valuation_board import fill_balance_gaps, optiiq_sector, optiiq_of, buy_plan, is_current, MODEL_V, FIN_FIELDS
 from engine import (
     STRATEGIES, STRATEGY_META, PROFILES, ACCOUNT_TYPES, EXP_DAYS, MIN_POP_FLOOR, CREDIT_VARIANTS, LEVEL_NAMES, user_options_level,
     volatility_profile, build_idea, default_filters, passes, candidate_strategies, compact,
     trade_plan, price_scenarios, dcf_valuation, default_dcf_inputs, apply_fit, apply_history, management_plan,
 )
-from optiiq import optiiq_value
 import quant
+from optiiq import in_listing_terms, DISPLAY_MONEY
 import market
 import signup
 import account
@@ -353,6 +353,8 @@ async def warm_universe_loop():
     while True:
         async with httpx.AsyncClient() as client:
             for s in UNIVERSE:
+                while market.recent_calls("finnhub.io") > market.BACKGROUND_CAP:  # user requests come first
+                    await asyncio.sleep(2)
                 before = market.CALL_COUNTS.get("api.polygon.io", 0)
                 try:
                     snap = await ticker_snapshot(client, s["ticker"])
@@ -721,11 +723,90 @@ def optiiq_brief(o: Dict[str, Any], bp: Dict[str, Any]) -> str:
     return f"{head} Buy levels: {lv or 'none'}. {bp.get('summary') or ''}"
 
 
+OPTIIQ_SAVED_FRESH = 12 * 3600  # a non-board ticker's saved company data is re-used for 12 hours (filings change quarterly)
+
+
+async def optiiq_for(tk: str, price: float, board: Dict[str, Any], saved: Dict[str, Any], live: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """One OptiIQ Value per ticker for Analyze, the board sheet and the quick card, so all three agree. S&P 500 names use the
+    board's stored company data (refreshed daily); other tickers re-use the inputs saved by the last lookup for 12 hours,
+    else live metrics + SEC filings (`live`). A rate-limited provider falls back to the last saved filings, then to the
+    live per-share metrics alone."""
+    if is_current(board):
+        return optiiq_of(board, price)
+    saved_ok = saved.get("financials") or (saved.get("currency") or "USD") != "USD"  # foreign listings value from metrics alone
+    if is_current(saved) and saved_ok and time.time() - saved.get("ts", 0) < OPTIIQ_SAVED_FRESH:
+        return optiiq_of(saved, price)
+    live = live or {}
+    m = live.get("metrics") or {}
+    doc = {"ticker": tk, "name": live.get("name"), "sector": optiiq_sector(tk, live.get("sector") or UNIVERSE_INDEX.get(tk, {}).get("sector")), "metrics": m,
+           "financials": [{k: r.get(k) for k in FIN_FIELDS} for r in live.get("financials") or []],
+           "estimates": live.get("estimates") or [], "currency": live.get("currency") or "USD", "model_v": MODEL_V}
+    if m.get("market_cap") and (doc["financials"] or doc["currency"] != "USD"):
+        await db.optiiq_inputs.update_one({"_id": tk}, {"$set": {**doc, "ts": time.time()}}, upsert=True)
+        return optiiq_of(doc, price)
+    old = next((d for d in (saved, board) if d.get("financials") and (d.get("metrics") or {}).get("market_cap")), None)
+    logger.info(f"optiiq {tk}: live metrics={bool(m.get('market_cap'))} financials={len(doc['financials'])}, saved copy={bool(old)}")
+    if old:
+        return optiiq_of({**doc, "financials": old["financials"], "metrics": m if m.get("market_cap") else old["metrics"],
+                          "estimates": doc["estimates"] or old.get("estimates") or []}, price)
+    if m.get("market_cap"):  # no filings anywhere: cash, debt and growth from the per-share metrics
+        return optiiq_of(doc, price)
+    return {"available": False, "reason": "Company data is temporarily unavailable. Try again in a minute."}
+
+
+async def optiiq_docs(tk: str) -> tuple:
+    board = await db.optiiq_board.find_one({"_id": tk}, {"capex_history": 0}) or {}
+    saved = await db.optiiq_inputs.find_one({"_id": tk}) or {}
+    return board, saved
+
+
+@api_router.get("/valuation/optiiq/{ticker}")
+async def optiiq_quick(ticker: str, authorization: Optional[str] = Header(default=None)):
+    """OptiIQ Value on its own, fast: S&P 500 names and recently looked-up tickers need one quote call; others only the
+    calls the 9 methods use. Analyze shows it while the full analysis (buy levels, financials, AI thesis) loads; the
+    board sheet uses it too."""
+    await get_user_from_token(authorization)
+    tk = ticker.upper().strip()
+    board, saved = await optiiq_docs(tk)
+    saved_ok = saved.get("financials") or (saved.get("currency") or "USD") != "USD"
+    stored = is_current(board) or (is_current(saved) and saved_ok and time.time() - saved.get("ts", 0) < OPTIIQ_SAVED_FRESH)
+    live: Dict[str, Any] = {}
+    async with httpx.AsyncClient() as client:
+        if stored:
+            quote = await get_quote(client, tk)
+        else:
+            got = await asyncio.gather(get_quote(client, tk), get_profile(client, tk), get_metrics(client, tk),
+                                       get_quarterly_financials(client, tk, 8), get_earnings(client, tk), return_exceptions=True)
+            quote, profile, metrics, financials, earnings = [None if isinstance(x, Exception) else x for x in got]
+            live = {"name": (profile or {}).get("name"), "sector": (profile or {}).get("sector"), "currency": (profile or {}).get("currency"),
+                    "metrics": metrics or {}, "financials": financials or [], "estimates": (earnings or {}).get("estimates") or []}
+    price = (quote or {}).get("price") or board.get("price")
+    if not price:
+        raise HTTPException(status_code=404, detail=f"No live quote found for {tk}")
+    optiiq = await optiiq_for(tk, price, board, saved, live)
+    return {"ticker": tk, "name": board.get("name") or saved.get("name") or live.get("name") or tk,
+            "sector": board.get("sector") or saved.get("sector") or live.get("sector"), "price": round(price, 2), "optiiq": optiiq}
+
+
 @api_router.post("/screener/stock-analysis")
 async def stock_analysis(req: StockAnalysisReq, authorization: Optional[str] = Header(default=None)):
     user = await get_user_from_token(authorization)
     tk = req.ticker.upper().strip()
-    bundle = await fetch_stock_bundle(tk)
+    financials: List[Dict[str, Any]] = []
+    history: List[Dict[str, Any]] = []
+    if req.purpose == "long":  # company filings and 2 years of prices load alongside the quote bundle
+        async with httpx.AsyncClient() as client:
+            bundle, financials, history = await asyncio.gather(
+                fetch_stock_bundle(tk), get_quarterly_financials(client, tk, 8), get_candles(client, tk, 504), return_exceptions=True)
+        if isinstance(bundle, Exception):
+            raise bundle
+        if isinstance(financials, Exception):
+            logger.warning(f"financials {tk}: {financials}")
+            financials = []
+        if isinstance(history, Exception):
+            history = []
+    else:
+        bundle = await fetch_stock_bundle(tk)
     if not bundle.get("price"):
         raise HTTPException(status_code=404, detail=f"No live quote found for {tk}")
     d = user_defaults(user)
@@ -772,51 +853,27 @@ async def stock_analysis(req: StockAnalysisReq, authorization: Optional[str] = H
             f'JSON: {{"summary":"...","verdict":"BUY|SELL|HOLD","confidence":"low|med|high"}}'
         )
     else:
-        metrics = bundle.get("metrics") or {}
-        stored = await db.valuation_board.find_one({"_id": tk}, {"metrics": 1, "financials": 1, "estimates": 1, "model_v": 1}) or {}
-        live_metrics = bool(metrics.get("market_cap"))
-        if not live_metrics and stored.get("metrics"):  # provider rate-limited: last stored copy from the valuation board
-            metrics = stored["metrics"]
-        earnings = bundle.get("earnings") or {}
+        live = bundle.get("metrics") or {}
+        stored, saved = await optiiq_docs(tk)
+        # provider rate-limited: the last stored copy from the valuation board for the fundamentals shown
+        metrics = live if live.get("market_cap") or not stored.get("metrics") else stored["metrics"]
+        currency = (bundle.get("profile") or {}).get("currency")
+        earnings = dict(bundle.get("earnings") or {})
+        metrics, k = in_listing_terms(metrics, price, currency, DISPLAY_MONEY)  # foreign listing: figures in this listing's terms
+        if k not in (None, 1.0):
+            financials = []  # home-currency filings aren't comparable with this listing
+            if isinstance(earnings.get("eps_estimate"), (int, float)):
+                earnings["eps_estimate"] = round(earnings["eps_estimate"] * k, 2)
         pt = bundle.get("price_target")
-        eps = metrics.get("eps_ttm") or 0
+        eps = round(metrics.get("eps_ttm") or 0, 2)
         pe = metrics.get("pe_ttm") or 0
-        async with httpx.AsyncClient() as client:
-            try:
-                financials = await get_quarterly_financials(client, tk, 8)
-            except Exception as ex:
-                logger.warning(f"financials {tk}: {ex}")
-                financials = []
-            history = await get_candles(client, tk, 504)  # ~2 years for the buy-level chart
         if len(history) < len(candles):
             history = candles
         fill_balance_gaps(financials, metrics, price)
         dcf_in = default_dcf_inputs(metrics)
         valuation = dcf_valuation(price, eps, dcf_in["growth"], dcf_in["discount_pct"], dcf_in["terminal_pe"], dcf_in["weights"])
-        model_fins = financials
-        estimates = earnings.get("estimates") or []
-        live_ok = live_metrics and bool(financials)
-        if not live_ok:
-            logger.info(f"optiiq {tk}: live metrics={live_metrics} financials={len(financials)}, using saved inputs")
-        if live_ok:  # keep the last complete inputs, so a rate-limited provider doesn't blank (or skew) the value later
-            await db.optiiq_inputs.update_one({"_id": tk}, {"$set": {
-                "metrics": metrics, "financials": [{k: r.get(k) for k in FIN_FIELDS} for r in financials[-4:]],
-                "estimates": estimates, "model_v": MODEL_V, "ts": time.time()}}, upsert=True)
-        else:
-            saved = await db.optiiq_inputs.find_one({"_id": tk}) or {}
-            for doc in (saved, stored):  # last complete copy from Analyze, else the valuation board
-                if is_current(doc) and doc.get("financials"):
-                    metrics = metrics if live_metrics else doc["metrics"]
-                    model_fins = [dict(r) for r in doc["financials"]]
-                    fill_balance_gaps(model_fins, metrics, price)
-                    estimates = estimates or doc.get("estimates") or []
-                    live_ok = True
-                    break
-        if live_ok:
-            optiiq = optiiq_value(price, metrics, model_fins, optiiq_sector(tk, bundle.get("sector") or UNIVERSE_INDEX.get(tk, {}).get("sector")), tk,
-                                  estimates)
-        else:  # rate-limited with no complete saved copy: say so rather than value the company on partial data
-            optiiq = {"available": False, "reason": "Company filings are temporarily unavailable. Try again in a minute."}
+        optiiq = await optiiq_for(tk, price, stored, saved, {"name": bundle.get("name"), "sector": bundle.get("sector"), "currency": currency,
+                                                             "metrics": live, "financials": financials, "estimates": earnings.get("estimates") or []})
         iv_line = (optiiq["value"], "OptiIQ Value") if optiiq.get("available") and optiiq.get("confidence") != "low" else (None, None)
         bp = buy_plan(history, price, iv_line[0])
         resp = {
@@ -840,7 +897,8 @@ async def stock_analysis(req: StockAnalysisReq, authorization: Optional[str] = H
             "intrinsic_line": {"value": iv_line[0], "source": iv_line[1]},
             "buy_levels": bp["levels"], "buy_overlay": bp["overlay"], "buy_summary": bp["summary"],
             "price_history": [[c.get("t"), round(c["c"], 2)] for c in history],
-            "financials_source": "SEC 10-Q/10-K filings via Finnhub (quarterly values derived from year-to-date figures)",
+            "financials_source": ("SEC 10-Q/10-K filings via Finnhub (quarterly values derived from year-to-date figures)" if financials
+                                 else "Quarterly filings aren't available for this listing"),
             "buy_point": valuation["buy_zone_below"] if valuation else None,
             "sell_point": valuation["sell_zone_above"] if valuation else None,
         }

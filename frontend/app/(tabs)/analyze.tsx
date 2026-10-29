@@ -41,6 +41,8 @@ function Analyze() {
   const [range, setRange] = useState("month");
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<any>(null);
+  const [iq, setIq] = useState<any>(null); // OptiIQ Value on its own, shown while the full long-term analysis loads
+  const lastRun = useRef("");
   const [onWatchlist, setOnWatchlist] = useState(false);
   const [strategy, setStrategy] = useState("auto");
   const [acct, setAcct] = useState("reg_t");
@@ -71,24 +73,31 @@ function Analyze() {
     const tk = (o.tk || ticker).trim().toUpperCase();
     if (!tk) { toast("Enter a ticker", "error"); return; }
     const which = o.l || lab;
-    setLoading(true); setData(null);
+    setLoading(true); setData(null); setIq(null);
+    const runId = `${which}:${tk}:${Date.now()}`;
+    lastRun.current = runId;
     try {
       if (which === "options") {
         const r = await api("/api/screener/ticker-options", { method: "POST", body: JSON.stringify({
           ticker: tk, expiration_range: o.rng || range, strategy: plan.strategyAllowed(o.strat || strategy) ? (o.strat || strategy) : "auto", account_type: acct, tier: plan.tier,
           account_size: parseFloat(acctSize) || undefined,
         }) });
+        if (lastRun.current !== runId) return; // a newer analysis started meanwhile
         setData(r.result);
         if (plan.features.ai_explain) explainOne(r.result);
       } else {
+        if (which === "long") {
+          api(`/api/valuation/optiiq/${tk}`).then((q) => { if (lastRun.current === runId) setIq(q); }).catch(() => {});
+        }
         const r = await api("/api/screener/stock-analysis", { method: "POST", body: JSON.stringify({
           ticker: tk, purpose: which, account_size: parseFloat(acctSize) || undefined,
           risk_pct: parseFloat(riskPct) || 1, min_rr: parseFloat(minRR) || 2,
         }) });
+        if (lastRun.current !== runId) return;
         setData(r.result);
       }
-    } catch (e: any) { toast(e.message || "Failed", "error"); }
-    finally { setLoading(false); }
+    } catch (e: any) { if (lastRun.current === runId) toast(e.message || "Failed", "error"); }
+    finally { if (lastRun.current === runId) setLoading(false); }
   };
 
   const explainOne = async (r: any) => {
@@ -191,7 +200,20 @@ function Analyze() {
           <Button testID="analyze-run" label={loading ? "Analyzing…" : "Analyze"} onPress={() => run()} loading={loading} />
         </View>
 
-        {loading && <View style={{ padding: spacing.xl }}><LoadingSkeleton lines={5} /></View>}
+        {loading && lab === "long" && iq ? (
+          <View testID="optiiq-quick" style={styles.card}>
+            <View style={styles.cardHeader}>
+              <View>
+                <Text style={styles.ticker}>{iq.ticker}</Text>
+                {iq.name ? <Text style={styles.company}>{iq.name}</Text> : null}
+              </View>
+              <Text style={styles.price}>${Number(iq.price).toFixed(2)}</Text>
+            </View>
+            <OptiIQChart o={iq.optiiq} />
+            <Text style={styles.rationale}>Loading buy levels, financials and the AI thesis…</Text>
+            <LoadingSkeleton lines={3} />
+          </View>
+        ) : loading ? <View style={{ padding: spacing.xl }}><LoadingSkeleton lines={5} /></View> : null}
 
         {data && (
           <View style={styles.card}>

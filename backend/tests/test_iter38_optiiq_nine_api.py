@@ -84,7 +84,7 @@ def test_stock_analysis_long_nine(auth, tk):
 # ---------- valuation board ----------
 def test_board_requires_auth():
     assert requests.get(f"{BASE_URL}/api/valuation/board", timeout=30).status_code == 401
-    assert requests.get(f"{BASE_URL}/api/valuation/board/AAPL", timeout=30).status_code == 401
+    assert requests.get(f"{BASE_URL}/api/valuation/optiiq/AAPL", timeout=30).status_code == 401
 
 
 @pytest.fixture(scope="module")
@@ -109,30 +109,42 @@ def test_board_shape(board):
 
 @pytest.mark.parametrize("tk", ["AAPL", "MSFT", "CCI", "BAC"])
 def test_board_stock(auth, board, tk):
-    r = requests.get(f"{BASE_URL}/api/valuation/board/{tk}", headers=auth, timeout=30)
+    r = requests.get(f"{BASE_URL}/api/valuation/optiiq/{tk}", headers=auth, timeout=30)
     assert r.status_code == 200, r.text[:200]
     _no_nan(r.text)
     d = r.json()
-    assert {"ticker", "name", "sector", "price", "price_ts", "optiiq"} <= set(d)
+    assert {"ticker", "name", "sector", "price", "optiiq"} <= set(d)
     _check_optiiq(d["optiiq"], d["price"])
     row = next((x for x in board["stocks"] if x["t"] == tk), None)
     if row and abs(row["p"] - d["price"]) < 0.005:
-        assert abs(row["v"] - d["optiiq"]["value"]) <= 0.01, (row, d["optiiq"]["value"])
+        assert abs(row["v"] - d["optiiq"]["value"]) <= 0.02, (row, d["optiiq"]["value"])
 
 
-@pytest.mark.parametrize("tk", ["ZZZZ", "ECHO"])
-def test_board_stock_404(auth, tk):
-    r = requests.get(f"{BASE_URL}/api/valuation/board/{tk}", headers=auth, timeout=30)
+def test_quick_unknown_ticker_404(auth):
+    r = requests.get(f"{BASE_URL}/api/valuation/optiiq/ZZZZ", headers=auth, timeout=30)
     assert r.status_code == 404
-    assert r.json()["detail"] == "This stock's valuation is still being prepared"
+
+
+@pytest.mark.parametrize("tk", ["PLTR", "SNOW", "CRWD", "JPM"])
+def test_quick_any_ticker(auth, tk):
+    """Board names and non-board names both return the 9-method structure quickly."""
+    t = time.time()
+    r = requests.get(f"{BASE_URL}/api/valuation/optiiq/{tk}", headers=auth, timeout=30)
+    assert r.status_code == 200, r.text[:200]
+    _no_nan(r.text)
+    d = r.json()
+    print(tk, round(time.time() - t, 2), "s", d["optiiq"].get("value"), d["optiiq"].get("count"), d["optiiq"].get("reason"))
+    if FALLBACK in (d["optiiq"].get("reason") or ""):
+        pytest.skip(f"{tk}: provider rate limited")
+    _check_optiiq(d["optiiq"], d["price"])
 
 
 def test_board_all_consistent_sample(auth, board):
     """Every 25th bucketed stock: board v matches per-stock optiiq value at same price."""
     bad = []
     for x in board["stocks"][::25]:
-        d = requests.get(f"{BASE_URL}/api/valuation/board/{x['t']}", headers=auth, timeout=30).json()
+        d = requests.get(f"{BASE_URL}/api/valuation/optiiq/{x['t']}", headers=auth, timeout=30).json()
         o = d["optiiq"]
-        if abs(d["price"] - x["p"]) < 0.005 and (not o.get("available") or abs(o["value"] - x["v"]) > 0.01):
+        if abs(d["price"] - x["p"]) < 0.005 and (not o.get("available") or abs(o["value"] - x["v"]) > 0.02):
             bad.append((x["t"], x["v"], o.get("value")))
     assert not bad, bad

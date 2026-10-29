@@ -1,0 +1,46 @@
+{
+  "summary": "Retested the iteration_36 fixes and the new SKHY / foreign-listing scaling. What works: the regression suites pass 62/62 (unit + iter38 + iter39). SKHY quick endpoint returns available=true, 9 methods, listing_scale 0.000120, value $627.71 vs price $164.70, confidence low with a caution note. The full long-term analysis gives the same OptiIQ value. TSM listing_scale is 0.183. AAPL, PLTR, V and UBER are 1.0. NVO (0.148) and TM (0.068) also look right. Warm quick calls for AAPL, PLTR and JPM take 0.2-0.4s. JPM skips the 4 cash-flow methods. Board list values match the quick endpoint. The optiiq_board refill is running: 382 -> 398 -> 411 -> 414 of 503 over about 9 minutes (about 4/min, slowed by auto-reloads). PLTR is on the board. V and UBER are not in the collection yet (refill pending), but their quick values are fine. Frontend: the SKHY quick card shows in 0.83s with the caution text and optiiq-listing-note; the full card shows the same $627.71. The note does not show for AAPL or PLTR. The COST -> ADBE (board sheet) race is fixed: COST's full result at +6.5s was ignored, the ADBE quick card stayed, and ADBE's full result came at +10.1s. NEW BUGS: (1) SKHY's full long-term card still uses unscaled Korean-won figures everywhere outside the OptiIQ card: EPS (TTM) $227,607.99, scenarios Bull $8,024,238 / weighted $6,302,101 (+3,826,312%), buy/sell point $4.66M/$8.02M, market cap $977T, EPS estimate $99,667, 52-week high 2,987,000, and the AI thesis remarks that the EPS looks like another currency. (2) listing_scale gives false positives on US stocks IBKR (0.264) and CVNA (0.255). Their per-share figures get shrunk about 4x and the 'reported in another currency' note shows for a US stock. No deprecated Expo packages found.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "POST /api/screener/stock-analysis (purpose=long) for foreign listings (SKHY, TSM etc.)", "issue": "listing_scale is only applied inside optiiq_of. server.py:859-885 uses the raw metrics for eps_ttm, pe-based dcf_valuation (scenarios, buy_point, sell_point), earnings_eps_estimate, fifty_two_week_high/low, valuation_measures.market_cap/enterprise_value and the AI prompt (EPS $227607). For SKHY that means weighted value $6.3M, buy point $4,657,807.84, EPS $227,607.99, market cap $977.41T, all shown on the Analyze long card.", "priority": "HIGH"},
+      {"endpoint": "optiiq.listing_scale (GET /api/valuation/optiiq/IBKR, /CVNA, board)", "issue": "US listings get k != 1. IBKR: pe_ttm 120.9 x eps 2.61 = 316 vs price 83.54, so k=0.264. ps x rps and pb x bvps agree, which means the provider's ratio fields are stale (pre-split) while the per-share figures are already in listing terms (market_cap 142.3B / price = 1.70B shares, which is IBKR's share count). EPS without NRI ends up $0.69, CVNA operating cash flow $286M (its filings show net income $310M in one quarter), and the UI shows the 'another currency / home-market share' note on US stocks. CVNA and IBKR are on the board with these wrong values (IBKR shown as very_under).", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "POST /api/screener/stock-analysis (long)", "issue": "financials_source is hard-coded to 'SEC 10-Q/10-K filings via Finnhub' even when financials is [] (SKHY, TSM have no SEC quarterly rows)."},
+      {"endpoint": "optiiq_for (SKHY/TSM/other foreign tickers without SEC financials)", "issue": "Results are never saved to optiiq_inputs because doc['financials'] is empty (server.py:742). Each quick lookup after the market cache expires costs 5 Finnhub calls again, so foreign tickers are not 'efficient' like US ones."},
+      {"endpoint": "optiiq method notes for scaled listings", "issue": "Note totals like 'Operating cash flow $15.23B' or 'Net income $19.42B' for SKHY are home-currency totals multiplied by the per-listing price factor. They are not real USD company totals, which can mislead users. Consider showing per-share figures only, or labelling them."},
+      {"endpoint": "listing_scale 0.5-2.0 dead band", "issue": "Currency gaps under 2x are never corrected (EUR, GBP, CHF, CAD, AUD reporters such as ASML get k=1.0). Values can be 10-35% off for those ADRs."},
+      {"endpoint": "valuation_board refill", "issue": "Refill is about 4.5 stocks/min. At 414/503 the last ~89 (including UBER and V) need about 20 more minutes. Every backend auto-reload (any file change under /app/backend, including tests) loses the lease and pauses the refill for up to 3 min."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "LongForm ValuationEditor / ValuationMeasures (analyze.tsx:550-599)", "issue": "SKHY shows absurd unscaled values: scenario cards $8024238.39 / $6263180.82 / $4657807.84 that overflow their card width, Probability-weighted value $6302101.97 (+3826312.9%), Buy/Sell point $4.66M/$8.02M, Market Cap $977.41T, EPS (TTM) $227607.99, EPS estimate $99667.28. Root cause is backend (see critical #1).", "testID": "dcf-recalc", "priority": "HIGH"},
+      {"component": "OptiIQChart listing note", "issue": "optiiq-listing-note shows for US stock IBKR in the board sheet (caused by the listing_scale false positive).", "testID": "optiiq-listing-note", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": [{"screen": "Analyze long - Intrinsic value scenarios", "issues": ["Scenario card value text has no adjustsFontSizeToFit/numberOfLines, so large values overflow into neighbouring cards"]}],
+    "react_native_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_iter40_listing_scale_board.py", "/app/test_reports/pytest/iter40.xml", "/app/backend/tests/test_optiiq_nine_unit.py", "/app/backend/tests/test_iter38_optiiq_nine_api.py", "/app/backend/tests/test_iter39_optiiq_quick.py"],
+  "action_items": [
+    "stock_analysis (server.py ~853-899): compute k = listing_scale(price, metrics) once. Scale eps_ttm, earnings eps_estimate, 52w high/low (or hide them when k != 1), and the eps passed to dcf_valuation (or skip the EPS-DCF editor for k != 1). Scale or label market_cap/EV as home currency, and pass the scaled EPS to the AI prompt.",
+    "listing_scale: don't trigger on US listings with stale provider ratios. Options: only apply when profile country != 'US' or the reporting currency != USD; or cross-check market_cap / price against the share count from the SEC filings (IBKR 1.70B matches, so k should be 1); or prefer the per-share figures when SEC financials exist. Add IBKR and CVNA to the unit tests as k == 1 cases.",
+    "Set financials_source to a 'no SEC filings for this listing' text when financials is empty.",
+    "Optionally cache optiiq inputs for no-financials foreign tickers (metrics-only doc) so SKHY/TSM quick lookups don't spend 5 Finnhub calls each time.",
+    "Recheck later that the board reaches ~500 and that UBER and V appear in GET /api/valuation/board stocks."
+  ],
+  "critical_code_review_comments": [
+    "optiiq.py:55-65 listing_scale picks the first ratio pair available and trusts it. A stale P/E (split, restatement) on a US stock triggers scaling. It needs a sanity cross-check across ratio pairs and against filing share counts.",
+    "server.py:859-885 mixes scaled (optiiq) and unscaled (eps/valuation/measures) numbers in one response, so the card contradicts itself for foreign listings.",
+    "analyze.tsx run(): the lastRun guard is now correct for setData, setLoading and toast (verified live).",
+    "market.get_profile no longer caches empty answers (market.py:283). The budget warning log is present."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter40_listing_scale_board.py (new)"],
+  "success_rate": {"backend": "13/16 iter40 tests (3 failures are real bugs) + 62/62 regression = 75/78 (96%)", "frontend": "90% (quick card, listing note, parity, race fix and board sheet work; SKHY full card shows unscaled figures; IBKR note false positive)"},
+  "seed_data_creation": "None. No users created; only read queries on optiiq_board/locks in Atlas.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: cd /app/backend && EXPO_PUBLIC_BACKEND_URL=https://optionscope.preview.emergentagent.com python -m pytest tests/test_iter40_listing_scale_board.py -q -s -n0 (pytest.ini adds -n xdist; use -n0 for ordered output). The backend DB is SHARED_DB_NAME via atlas.shared_mongo_url, not MONGO_URL/DB_NAME. Board docs are in optiiq_board; lease is locks.board_refresh. Creating or editing test files under /app/backend triggers uvicorn reload and pauses the board refill.",
+  "rca_of_issue": "SKHY full card: optiiq_of applies listing_scale to its own copy of the metrics, but stock_analysis builds eps/valuation/measures from the raw metrics, so only the OptiIQ block is converted. IBKR/CVNA: listing_scale = price/(pe_ttm*eps_ttm). Finnhub's pe/ps/pb for these tickers imply a price ~4x the quote (stale pre-split ratios), so a US stock is treated as a foreign listing. Repro: GET /api/valuation/optiiq/IBKR -> inputs.listing_scale 0.264; POST /api/screener/stock-analysis {ticker:SKHY,purpose:long} -> eps_ttm 227607.99, buy_point 4657807.84."
+}

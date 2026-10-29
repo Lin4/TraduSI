@@ -1,0 +1,42 @@
+{
+  "summary": "Iteration 39 retest (quick OptiIQ + PLTR blank fix). BACKEND: regression iter38 + unit = 40 passed / 1 skipped. New tests/test_iter39_optiiq_quick.py = 19/19 pass on the final run. The first run lost 4 to transient Finnhub limits: V, SNOW, UBER and NET returned 'Company data is temporarily unavailable'. V/SNOW/UBER still failed when retried about 2.5 min later; all passed later. GET /api/valuation/optiiq/{t} is fast (0.25-0.6s), 401 without auth, 404 for ZZZZ. Old /api/valuation/board/{t} is removed (404/405). JPM and TRV skip the 4 cash-flow methods (bank_or_insurer true). PLTR = $93.00 with 9 methods @ $196.81. Quick value = stock-analysis long value for PLTR/SHOP/JPM. Board list v = quick value for AAPL/JPM. FRONTEND: Long-term analysis shows the optiiq-quick card in about 0.4s (CRWD, PLTR, UBER, JPM), with the 'Loading buy levels…' text. The full result arrives in 6-9s with the same value plus verdict and B1-B4. Board sheet works for JPM (4 Skipped), AAPL and ADBE, and vb-sheet-close works. BUT: PLTR (also UBER and V) is NOT on the S&P board (181/503 'unrated'). Also a stale first-ticker full result flashes during a second run started from the board sheet.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "GET /api/valuation/board (list) + board refresh loop", "issue": "181 of 503 S&P stocks (including PLTR, UBER, V) are 'unrated' and missing from the board. Searching 'PLTR' shows 'No S&P 500 stock matches \"PLTR\" yet.' RCA: the published OLD app shares the DB and keeps $set-ting valuation_board.metrics without metrics.mean_years, while model_v stays 8. So is_current() is False. The preview fundamentals_loop then re-refreshes them first every 15 min and the old app overwrites them again (mean_years count went 360 -> 352 -> 363 during testing). This churn burns the shared Finnhub budget, which is what causes the 'temporarily unavailable' results.", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "server.optiiq_for fallback", "issue": "If live metrics fail (429, or the in-process _slot budget is used up), a stale board doc that has metrics.market_cap (and often 4 financials) is ignored. The condition `d.get('financials') and (m.get('market_cap') or is_current(d))` rejects it. V (board doc: metrics, 0 financials) and UBER (board doc: 4 financials) returned 'Company data is temporarily unavailable' for about 3 minutes even though usable stored data existed. Suggest a last-resort fallback to non-current board/saved metrics + financials (6 methods computable without mean_years)."},
+      {"endpoint": "market.get_profile", "issue": "A rate-limited profile2 call (data None, no stale copy) is cached for 24h as name=ticker, sector='Unknown'. NET showed name 'NET' / sector 'Unknown' and ALLY showed 'ALLY' / 'Unknown'. The full analysis showed 'SHOP' / 'ABNB' as the company name. A non-S&P bank/insurer with sector 'Unknown' would wrongly get all 9 methods (is_bank_or_insurer checks the sector text), and that is saved to optiiq_inputs for 12h. Don't cache empty/failed profiles."},
+      {"endpoint": "valuation_board.refresh_fundamentals", "issue": "Repeated log 'board ECHO: 'str' object has no attribute 'get'': one S&P name always fails to refresh."},
+      {"endpoint": "_slot in-process budget", "issue": "When the local 55/min budget is spent, _fetch returns None silently (no log). The 'live metrics=False' lines then have no matching 429 warning, which makes RCA harder."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Analyze Long-term: second run while the first is loading", "issue": "In run() (app/(tabs)/analyze.tsx:91-98), setData(r.result) and finally setLoading(false) are NOT guarded by lastRun/runId; only setIq is. The analyze-run button is disabled while loading, but the ValuationBoard (line 236) stays visible, so vb-stock -> vb-sheet-analyze starts a second run. Reproduced: COST run, then ADBE from the board sheet 2.7s later. ADBE's quick card showed, then at +3.4s COST's FULL result replaced it (quick card gone, loading cleared) until ADBE's full result came at +7.2s. Fix: `if (lastRun.current !== runId) return;` before setData, and only setLoading(false) for the current run.", "affected_testIDs": ["optiiq-quick", "vb-sheet-analyze", "analyze-run"]}
+    ],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_iter39_optiiq_quick.py", "/app/test_reports/pytest/iter39.xml"],
+  "action_items": [
+    "Stop the board churn with the old published app: either make is_current() tolerant (e.g. keep mean_years in a separate field/collection the old app doesn't overwrite, such as optiiq_inputs for S&P names too), or don't let a doc lacking mean_years trigger an immediate re-refresh every 15 min. Then PLTR/UBER/V etc. show on the board again.",
+    "optiiq_for: add a last-resort fallback that uses any stored board/saved metrics (market_cap present) + financials even if not is_current, before returning 'temporarily unavailable'.",
+    "market.get_profile: don't cache the empty fallback profile ({name: ticker, sector: 'Unknown'}) when the provider call failed.",
+    "analyze.tsx run(): guard setData/setLoading with lastRun.current === runId so a stale first-ticker full result never shows during a second run.",
+    "Fix the 'board ECHO: str has no attribute get' refresh error."
+  ],
+  "critical_code_review_comments": [
+    "server.py is 1479 lines (>700): consider splitting the stock-analysis / optiiq routes into a module.",
+    "BoardStockSheet useEffect has no cancel guard: a quick ticker switch could set the previous ticker's data (low risk).",
+    "OptiIQ shared computation (optiiq_for) is correctly reused by the quick endpoint and stock-analysis: values matched exactly."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter39_optiiq_quick.py (new)"],
+  "success_rate": {"backend": "100% final run (19/19 new + 40/41 regression with 1 skip). The first run had 4/19 transient rate-limit failures", "frontend": "~85% (quick card, full result, sheet OK; PLTR missing from board; stale-result race)"},
+  "seed_data_creation": "None. No users created.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "pytest.ini adds -n/xdist: run new tests with `-n 0`. Creating files under /app/backend triggers a WatchFiles reload (~90s of read timeouts), so wait before running. The DB is the SHARED Atlas DB (atlas.shared_mongo_url + SHARED_DB_NAME), not MONGO_URL/DB_NAME. stock-analysis results are cached (repeat calls ~0.4s). Login: lingesa4@gmail.com / Linges1@12, login testIDs login-email/login-password/login-submit, then go to /analyze and tap lab-long. On web the vb-sheet slides in, so wait ~1s before tapping vb-sheet-analyze.",
+  "rca_of_issue": "'temporarily unavailable': optiiq_for returns it only when live metrics are empty (Finnhub 429 or the local _slot budget is spent) AND there is no is_current saved/board copy. Many S&P board docs are not current because the old published app rewrites metrics without mean_years, and the fallback rejects those docs. Repro: right after a burst of ~15 Finnhub-heavy calls, GET /api/valuation/optiiq/V and /UBER returned available:false for about 3 min. They recovered once the budget reset."
+}
