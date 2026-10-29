@@ -3,6 +3,7 @@ import { View, Text, Pressable, ScrollView, TextInput, ActivityIndicator } from 
 import Icon from "@react-native-vector-icons/feather";
 
 import { api } from "./api";
+import { BoardStockSheet } from "./BoardStockSheet";
 import { colors, spacing, radius, themedStyles, useTheme, type ThemeColors } from "./theme";
 
 type Stock = { t: string; n: string; s: string; p: number; v: number; d: number; b: string };
@@ -37,6 +38,7 @@ export function ValuationBoard({ onSelect }: { onSelect: (ticker: string) => voi
   const [query, setQuery] = useState("");
   const [sector, setSector] = useState("All");
   const [showMethod, setShowMethod] = useState(false);
+  const [peek, setPeek] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try { setData(await api("/api/valuation/board")); setErr(""); } catch (e: any) { setErr(e.message || "Couldn't load the board"); }
@@ -123,7 +125,7 @@ export function ValuationBoard({ onSelect }: { onSelect: (ticker: string) => voi
         {shown.map((x) => {
           const tone = BUCKET_TONE[x.b];
           return (
-            <Pressable key={x.t} testID={`vb-stock-${x.t}`} onPress={() => onSelect(x.t)} style={[s.chip, { backgroundColor: tone.bg }]}>
+            <Pressable key={x.t} testID={`vb-stock-${x.t}`} onPress={() => setPeek(x.t)} style={[s.chip, { backgroundColor: tone.bg }]}>
               <Text style={s.chipTicker} numberOfLines={1}>{x.t}</Text>
               <Text style={[s.chipPct, { color: tone.fg }]}>{signedPct(x.d)}</Text>
             </Pressable>
@@ -133,9 +135,10 @@ export function ValuationBoard({ onSelect }: { onSelect: (ticker: string) => voi
       {!shown.length ? <Text style={s.empty}>{q ? `No S&P 500 stock matches "${query}" yet.` : building ? "Nothing in this group yet. Still valuing stocks." : "No stocks in this group right now."}</Text> : null}
 
       <Text style={s.foot}>
-        Negative % = price below intrinsic value (discount). Tap a stock for its full analysis.
+        Negative % = price below OptiIQ Value (discount). Tap a stock to see its 9 valuation methods.
         {data.unrated.length ? ` ${data.unrated.length} stocks have no OptiIQ value (losses or missing data).` : ""}
       </Text>
+      <BoardStockSheet ticker={peek} onClose={() => setPeek(null)} onAnalyze={(t) => { setPeek(null); onSelect(t); }} />
     </View>
   );
 }

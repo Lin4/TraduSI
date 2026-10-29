@@ -186,16 +186,6 @@ export function PeerComparison({ ticker }: { ticker: string }) {
 }
 
 const s = themedStyles((colors) => ({
-  iq: { backgroundColor: colors.brandSecondary, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.brandPrimary, padding: spacing.lg, marginBottom: spacing.md },
-  iqRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, marginTop: 4 },
-  iqTag: { fontSize: 12, fontWeight: "800", borderWidth: 1, borderRadius: radius.pill, paddingHorizontal: spacing.sm, paddingVertical: 2, overflow: "hidden" },
-  iqTop: { flexDirection: "row", alignItems: "flex-start", marginBottom: spacing.sm },
-  iqLabel: { fontSize: 11, fontWeight: "800", color: colors.onBrandSecondary, textTransform: "uppercase", letterSpacing: 1 },
-  iqValue: { fontSize: 30, fontWeight: "800", color: colors.onSurface, fontVariant: ["tabular-nums"], letterSpacing: -0.5 },
-  iqUp: { fontSize: 13, fontWeight: "800", fontVariant: ["tabular-nums"] },
-  iqBadge: { fontSize: 11, fontWeight: "800", borderWidth: 1, borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 4 },
-  iqSmall: { fontSize: 11, color: colors.onSurfaceSecondary, marginTop: 2 },
-  iqSection: { fontSize: 10, fontWeight: "800", color: colors.muted, textTransform: "uppercase", letterSpacing: 1, marginTop: spacing.sm, marginBottom: 6 },
   rangeTrack: { height: 12, borderRadius: 6, backgroundColor: colors.surfaceTertiary, position: "relative" },
   rangeFill: { position: "absolute", top: 0, bottom: 0, borderRadius: 6, backgroundColor: colors.brandPrimary, opacity: 0.3 },
   rangeMark: { position: "absolute", top: -3, width: 4, height: 18, borderRadius: 2, marginLeft: -2 },
@@ -231,29 +221,3 @@ const s = themedStyles((colors) => ({
   tdHead: { fontSize: 10, color: colors.muted, fontWeight: "800" },
   note: { fontSize: 10, color: colors.muted, fontStyle: "italic", marginTop: spacing.sm, lineHeight: 14 },
 }));
-
-/** OptiIQ Value: intrinsic value per share, with % vs current price. */
-export function OptiIQCard({ o }: { o: any }) {
-  useTheme();
-  if (!o || !o.available) {
-    return (
-      <View testID="optiiq-unavailable" style={s.iq}>
-        <Text style={s.iqLabel}>OptiIQ Value</Text>
-        <Text style={s.iqValue}>—</Text>
-        <Text style={s.iqSmall}>{o?.reason || "Not available"}</Text>
-      </View>
-    );
-  }
-  const up = o.upside_pct >= 0;
-  return (
-    <View testID="optiiq-card" style={s.iq}>
-      <Text style={s.iqLabel}>OptiIQ Value</Text>
-      <View style={s.iqRow}>
-        <Text testID="optiiq-value" style={s.iqValue}>${o.value}</Text>
-        <Text testID="optiiq-upside" style={[s.iqTag, { color: up ? colors.success : colors.error, borderColor: up ? colors.success : colors.error }]}>
-          {up ? "+" : ""}{o.upside_pct}% vs price
-        </Text>
-      </View>
-    </View>
-  );
-}

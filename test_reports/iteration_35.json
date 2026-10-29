@@ -1,0 +1,44 @@
+{
+  "summary": "OptiIQ v8 (average of 9 methods) tested. Backend: 25/30 pass. stock-analysis long (MSFT 521.03, AAPL 241.80, TSLA 144.05, JPM 847.48) returns all 9 methods in the right order, count, the plain average, upside_pct and intrinsic_value rule, with no NaN or Infinity. The 17 unit tests pass. Board auth, shape, 5 buckets, d math and 404 for ZZZZ and ECHO all pass. CRITICAL: board 'v' does not match /valuation/board/{t} for most stocks. ANOTHER PROCESS outside this backend writes to the shared Atlas valuation_board collection with model_v=8 and a different formula. It overwrote values every price cycle while I watched: AAPL went 175.06 (other writer) -> 241.80 (ours, once our price_loop ran) -> 175.06 again. Frontend: MSFT card, 9 rows, values, note open and close, 'Average of 9 methods' footer, bar-only dashed lines, board buckets, search, chip, sheet, close, 'Full long-term analysis', LCID unavailable (avg below zero), CCI low-confidence warning, and the Discover, Chain, Portfolio, Alerts and Learn tabs all work. No red screens or page errors.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "GET /api/valuation/board (stored v/d/b)", "issue": "Two processes write db.valuation_board in the shared Atlas DB. The other one (likely the web app or an older deployed backend) uses model_v=8 with a different OptiIQ formula and keeps overwriting value/premium/bucket/price_ts. Evidence: (1) I saw AAPL flip 175.06 -> 241.80 -> 175.06 within minutes. (2) Unrated reasons include 'Not enough positive earnings or cash flow', which is not in current optiiq.py. (3) Docs still carry capex_history, a model 7 field. Result: board chip AAPL shows +96% while its sheet shows OptiIQ $241.80 (price about 42% above value). CCI sits in 'fair' (-5%) and BAC in a bucket with v 39.53, but current code says low-confidence, so both should be unrated. Sample mismatches: GDDY 317.88 vs 200.73, KMI 46.45 vs 102.25, TJX 172.92 vs 357.79, EG 596.8 vs 874.4.", "priority": "CRITICAL"}
+    ],
+    "minor": [
+      {"endpoint": "POST /api/screener/stock-analysis vs GET /api/valuation/board/{t}", "issue": "At the same price, Analyze (live inputs) and the board sheet (stored inputs) differ a lot for some stocks: JPM 847.48 vs 1659.92, BAC 196.78 vs 398.82, TSLA 144.05 vs 137.15. The stored inputs are probably also being overwritten by the other writer, or are older."},
+      {"endpoint": "optiiq.py (banks / Financials)", "issue": "Cash-flow methods don't make sense for banks: JPM DCF-20 -1767.34 and DFCF-Terminal 3920.54. The result is JPM +149.8% marked available with normal confidence, so intrinsic_value is set and it feeds buy levels. Consider skipping OCF/FCF methods for Financials, or always marking them low confidence."},
+      {"endpoint": "optiiq.py mean_ps", "issue": "A 10-year mean P/S for recent IPOs or companies that had no revenue explodes: RIVN Mean PS 1527 at price 11.67, LCID Mean PS 2033 at price 3.41. Consider a median, or capping or excluding pre-revenue years."},
+      {"endpoint": "optiiq.py:212 reason text", "issue": "Negative average is formatted '$-356.67'. It should be '−$356.67', the same as the UI's usd()."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "ValuationBoard chip vs BoardStockSheet", "issue": "Chip premium (e.g. AAPL +96%, CCI -5%) disagrees with the sheet's OptiIQ value (AAPL $241.80 / -29.7%; CCI is low-confidence in Analyze). This comes from the backend's second writer.", "testID": "vb-stock-AAPL", "priority": "HIGH"},
+      {"component": "OptiIQChart footer", "issue": "Rounding mismatch: the footer shows 'Growth ... 8.6% (6–10)' but the DCF note says '8.7% for 6-10' for MSFT. The footer uses round(g2,4) then toFixed(1); the note formats the unrounded value.", "testID": "optiiq-card", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Board chip vs sheet", "issues": ["Chip shows premium (price ÷ value − 1, +96%) while the sheet tag shows upside (value ÷ price − 1, −29.7%). The opposite sign conventions side by side are confusing. Consider labelling the chip '% over value' or using the same metric."]}
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_iter38_optiiq_nine_api.py", "/app/backend/tests/_diag_board.py", "/app/test_reports/pytest/iter38.xml"],
+  "action_items": [
+    "CRITICAL: stop the second writer on the shared Atlas valuation_board collection. Find which deployment (web app, or a production/older mobile backend) runs a board price/fundamentals loop with model_v=8 and a different formula, and turn it off or bring it in line. Or give the mobile board its own collection (e.g. valuation_board_mobile) or a unique model tag (e.g. MODEL_V='m8-nine') so neither side reads the other's docs.",
+    "Optional hardening: have GET /valuation/board recompute v/d/b from stored inputs (or keep a separate field written only by this backend) so the list and /valuation/board/{t} always agree.",
+    "Consider low confidence or skipping OCF/FCF methods for Financials (JPM +150% is shown as a normal-confidence value), and capping the mean P/S outliers for recent IPOs (RIVN, LCID).",
+    "Minor: format negative averages in the optiiq reason as −$X. Make the footer growth rounding match the method notes."
+  ],
+  "critical_code_review_comments": [
+    "valuation_board.py: the price_loop and fundamentals_loop $set docs but never $unset old fields (capex_history from model 7 is left behind). Docs are keyed only by _id plus model_v, so any other writer using the same version number is accepted as valid.",
+    "valuation_board.py:413: the board list trusts the stored 'value', while /valuation/board/{t} recomputes from inputs. That is two sources of truth.",
+    "optiiq.py: when avg > 10x price the reason says 'Company data looks inconsistent' (RIVN), which hides the real cause (Mean PS outlier)."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter38_optiiq_nine_api.py (new)", "/app/backend/tests/_diag_board.py (new diagnostic, not collected by pytest)"],
+  "success_rate": {"backend": "83% (25/30; all 5 failures are the board v vs per-stock mismatch from the external writer)", "frontend": "95% (all flows work; the chip/sheet mismatch comes from the backend data)"},
+  "seed_data_creation": "None. No users were created.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Login lingesa4@gmail.com / Linges1@12. The backend DB is Atlas via SHARED_MONGO_URL/SHARED_DB_NAME (atlas.shared_mongo_url), not MONGO_URL. Run `python tests/_diag_board.py` from /app/backend to compare stored board value vs recomputed evaluate(). Creating files under /app/backend triggers a uvicorn --reload, so put scratch files in /tmp. Old tests test_iter29/30/32 are obsolete.",
+  "rca_of_issue": "Repro: GET /api/valuation/board -> AAPL v=175.06. GET /api/valuation/board/AAPL -> optiiq.value=241.80 at the same price 343.83. In Mongo, evaluate(doc) on the stored inputs gives 241.80. Right after our backend restarted, its price_loop (60s delay) wrote 241.80. A few minutes later the doc was back to 175.06 with a fresh price_ts, which this backend did not write. So another process writes the same collection with model_v 8 and a different model. Fix: isolate the collection or model tag, or switch off the other writer."
+}

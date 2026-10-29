@@ -104,29 +104,29 @@
 ## Iteration 23 (main agent) - Quant pipeline UI + rate-limit fix
 - Backend: market.py rate limiter + Mongo candle_cache + stale fallbacks; quant.backtest_same returns equity {hold, managed}; extras.risk_adjusted returns equity; track-record live.calibration.progress; track_loop retries backtest until 90% universe coverage.
 - Frontend: quality.tsx rewritten, new quantcharts.tsx, analyze.tsx (PipelineStrip, calibrated POP hero, money formatting), track-record.tsx (CalibrationChart, EquityCurve, CalibrationProgress).
-- needs_retesting: true
+- needs_retesting: false (iteration_35 + test_iter38 13/13 after board recompute fix)
 
 ## Iteration 24 (main agent) - Email verification at sign-up
 - Backend: signup.py (register -> pending + emailed code, verify, resend), emailer.py (Emergent managed email). server.py login returns 403 for pending sign-ups.
 - Frontend: app/(auth)/verify-email.tsx new; register.tsx + login.tsx + src/auth.tsx updated.
-- needs_retesting: true
+- needs_retesting: false (iteration_35 + test_iter38 13/13 after board recompute fix)
 
 ## Iteration 25 (main agent) - Forgot password + Change email
 - Backend: otp.py (shared), signup.py refactored, account.py (password-reset request/confirm, email-change request/resend/confirm), get_user_from_token requires a live session row.
 - Frontend: (auth)/forgot-password.tsx, change-email.tsx, src/CodeInput.tsx, src/authStyles.ts, login Forgot password link, Profile Change email row.
-- needs_retesting: true
+- needs_retesting: false (iteration_35 + test_iter38 13/13 after board recompute fix)
 
 ## Iteration 26 (main agent) - Ask AI (Claude Sonnet 5.5 + Opus 5.5 chat)
 - Backend: assistant.py + server.ai_ticker_context/ai_user_context; billing FEATURES ai_chat_per_day/ai_deep_per_day.
 - Frontend: app/assistant.tsx, src/assistant.ts, src/ChatParts.tsx, src/Markdown.tsx; entry buttons on Discover/Analyze/Portfolio; plans.tsx features.
-- needs_retesting: true
+- needs_retesting: false (iteration_35 + test_iter38 13/13 after board recompute fix)
 
 ## Iteration 27 (main agent) - S&P 500 valuation board + intrinsic-value buy levels + price-alert checker
 - Backend: valuation_board.py (new): data/sp500.json (503 tickers, GICS sector); GET /api/valuation/board (auth); background loops fundamentals_loop (daily, Finnhub-paced ~5 stocks/min, Mongo `valuation_board`), price_loop (Tradier batch quotes every 10 min), price_alert_loop (price_above/price_below alerts checked every 2 min in market hours -> alert deactivated with triggered_at/triggered_price, alert_events feed row, push). buy_levels(): 2y swing-low clusters (>=2 bounces) below min(price, intrinsic), filled with 10% steps.
 - server.py stock-analysis purpose=long now returns intrinsic_line {value, source}, buy_levels [B1..B4], price_history [[t, close]] (~2y); fill_balance_gaps + optiiq_sector shared with the board so values match.
 - tradier.quotes() batch helper; market.recent_calls().
 - Frontend: src/ValuationBoard.tsx (5 colored group tabs w/ counts, search, sector chips, 4-col chip grid, progress bar while building), src/BuyLevelsChart.tsx (SVG price line + intrinsic line + 4 buy levels, 6M/1Y/2Y, "Buy alert" -> POST /api/alerts/add price_below note "Buy level Bx"), analyze.tsx Long-term shows the board under the form; tapping a chip runs the long analysis. alerts.tsx shows triggered state + price events.
-- needs_retesting: true
+- needs_retesting: false (iteration_35 + test_iter38 13/13 after board recompute fix)
 
 ## Iteration 28 (main agent) - Dark theme + Appearance picker
 - theme.ts: light + dark palettes (+ new tokens warnBg/onWarnBg/errorBg/gainBg/lossBg/backdrop); preference store System/Light/Dark saved in AsyncStorage ("theme_preference"); `colors` is a Proxy resolving to the active theme; `themedStyles(factory)` replaces StyleSheet.create in 45 files; every component calls useTheme() to re-render on switch; root layout loads the saved pref, wraps ThemeProvider + StatusBar.
@@ -139,7 +139,7 @@
 - market.py: cash_and_investments, LongTermDebtAndCapitalLeaseObligationsCurrent, metrics revenue_growth_3y/eps_growth_3y/pfcf_ttm/pcf_ttm. Cash/debt taken from the latest filing that reports them.
 - valuation_board.buy_plan(candles, price, intrinsic): returns {levels, overlay{sma50, sma200, fib, reversals}, summary}. Levels = zones where reversal points, 50/100/200-day averages (+ times held), Fibonacci retracements of the 2y swing, 52-week low and OptiIQ Value agree; strength Strong/Moderate/Light, reasons[]. stock-analysis long returns buy_levels, buy_overlay, buy_summary.
 - Frontend: src/OptiIQCard.tsx (new; "See the calculation" toggle -> FCF forecast table, value bridge, WACC, growth, beta check), src/BuyLevelsChart.tsx (summary, layer toggles avg/fib/rev, MA lines, fib lines, reversal dots, strength badge + reasons per level).
-- needs_retesting: true
+- needs_retesting: false (iteration_35 + test_iter38 13/13 after board recompute fix)
 - Iteration 29b fixes: long-term AI thesis prompt now uses OptiIQ value + buy levels (server.optiiq_brief); intrinsic_value field = OptiIQ value (None when unavailable/low confidence, no fallback to the old EPS DCF). Cash flows are now cash flow to the firm (FCF + after-tax interest on debt); TTM FCF from Finnhub pfcfShareTTM (standardized, catches oil & gas capex) with filings fallback; years 1-5 growth capped at revenue-growth median + 5pts; utilities use the book-value model; values >3x or <1/4 of price get confidence="low" (warning on card, excluded from board buckets -> unrated with reason). When Finnhub is rate-limited, stock-analysis uses the board's stored metrics/financials. cf_note tolerance (10%), year labels always set, stage2_floored / capped_by_revenue / wacc_floored hints, httpx logger WARNING (no API keys in logs). UI: strength badge no wrap, Intrinsic label moves below when it collides with a level, Buy alert buttons 44px.
 
 ## Iteration 31 (main agent) - OptiIQ old display restored + Free plan (7-day trial = Advance, then read-only)
@@ -147,7 +147,7 @@
   -> analyze.tsx + financials.tsx reverted to the previous UI: OptiIQCard (src/financials.tsx: "OptiIQ Value", $value, "+x% vs price" tag), BuyLevelsChart (multi-signal version kept), "Intrinsic value · scenarios" editor (bull/base/bear, buy/sell zone, Edit assumptions, Recalculate), Fundamentals ValuationMeasures with buy/sell. src/OptiIQCard.tsx deleted. Backend OptiIQ v4 unchanged.
 - Plans: billing.FEATURES["trial"] = Advance features (unlimited scans, spreads, 20 alerts, smart alerts, AI explain, backtest, Ask AI 30/5). Frontend plans.tsx same + FREE_CARD (onboarding plan screen, upgrade screen Free card with CURRENT/ENDED tag, Profile plan card).
 - Expired (7 days after sign-up, no paid plan): Discover/Analyze/Chain/ticker detail show PlanGate paywall (ticker page has Go back). Portfolio + Alerts are no longer paywalled: TrialEndedBanner, saved strategies/watchlist/alerts visible, add-ticker card + Ask AI review + strategies-empty hidden, alerts "+" opens /upgrade, "Check now" hidden, usage text "N saved alerts".
-- needs_retesting: true
+- needs_retesting: false (iteration_35 + test_iter38 13/13 after board recompute fix)
 
 ## Iteration 32 (main agent) - Expo SDK 57 -> 58 upgrade
 - `yarn expo install expo@^58.0.0` + `yarn expo install --fix` + `yarn expo install expo-asset` (missing peer of expo-audio; app.json plugins gained "expo-asset"). expo-doctor 20/20.
@@ -165,7 +165,7 @@
 ## Iteration 35 (main agent) - OptiIQ Value v5 (revenue-driven DCF per user's template)
 - See PRD "OptiIQ Value v5". Verified: MU long-term analysis -> optiiq value 1695.91 (+72.5%), card unchanged; PLTR -> low confidence (no intrinsic line); board refreshing docs to model_v 5.
 - Old tests test_iter29/30 assert v4 fields (growth.stage1/stage2/long_term, mid-year discount) - obsolete now.
-- needs_retesting: true
+- needs_retesting: false (iteration_35 + test_iter38 13/13 after board recompute fix)
 
 ## Iteration 36 (main agent) - OptiIQ input fixes + One-tap trade plan + Weekly calibration report + Discover sort/filter + OptiScore breakdown
 - OptiIQ (engine.optiiq_value): Year-1 growth = avg(consensus coming quarters vs same quarters a year ago, latest reported quarter vs a year ago) -- seasonal run-rate removed. Capex now eases toward the company's own median capex/revenue over up to 10 fiscal years of 10-K filings (market.get_capex_history, filled from the annual call get_quarterly_financials already makes; company-specific tags e.g. nvda_PurchasesOfPropertyAndEquipment...). <3 years -> old 1.1x D&A rule. reinvestment.capex_rule / capex_history in output. valuation_board MODEL_V=7 (board refreshes over a few hours; docs store capex_history). Unit tests tests/test_iter32_optiiq_dcf_unit.py updated (18 pass).
@@ -173,4 +173,11 @@
 - Weekly calibration report: GET /api/track-record live.weekly {weeks[{week_of, week_end, n, wins, realized, calibrated_pop, model_pop, calibrated_n, gap, gap_model, brier, pnl}], summary, settling_next_7d, note}; picks now store pop_calibrated. Frontend src/WeeklyReport.tsx in Track record > Live picks (testID weekly-report).
 - OptiScore breakdown: engine.score_drivers -> idea.drivers {pillar: [{label, pts, note}]} (50 + sum(pts) = pillar score), idea.score_weights. Frontend src/ScoreBreakdown.tsx: tap a pillar in the OptiScore card (testID pillar-<k>-toggle) to see drivers.
 - Discover sort/filter: src/ResultSort.tsx toolbar above results (sort-optiscore/history/cost/pop, min-score-0/50/65/80, filter-low-cost, filter-clear), saved in AsyncStorage; cost badge on cards.
-- needs_retesting: true
+- needs_retesting: false (iteration_35 + test_iter38 13/13 after board recompute fix)
+
+## Iteration 37 (main agent) - OptiIQ v8: average of 9 valuation methods
+- backend/optiiq.py optiiq_value(): DCF-20 (OCF), DFCF-20 (FCF), DNI-20 (net income), DFCF-Terminal (10y FCF + 2.5% terminal), Mean PS / Mean PE / Mean PB (company's own 10-year averages from Finnhub annual series, market.get_metrics pe/ps/pb_mean_10y + mean_years), PSG, PEG. Discount rate from beta table 5-9%. Growth yrs 1-5 projected (avg of inputs, -10..30%), 6-10 half (>=4% unless lower), 11-20 4%. Value = average of available methods; zero/negative values count. Returns methods[{key,label,short,value,vs_price_pct,note}], count, inputs. avg<=0 / >10x price -> available false; >3x or <1/4 -> confidence low.
+- valuation_board MODEL_V=8; GET /api/valuation/board/{ticker} -> {ticker,name,sector,price,price_ts,optiiq} from stored data (404 if not on model 8 yet). scripts/board_migrate_v8.py refreshed metrics of all docs to model 8.
+- Frontend: src/OptiIQChart.tsx (Analyze > Long-term, testIDs optiiq-card / optiiq-unavailable, optiiq-value, optiiq-upside, optiiq-chart, optiiq-method-<key>, optiiq-method-<key>-value, optiiq-method-<key>-note on tap). Dashed price/value lines now drawn only across each bar (no longer over labels). src/BoardStockSheet.tsx: tap a stock chip on the S&P 500 board (vb-stock-<T>) -> sheet vb-sheet with the same chart, vb-sheet-close, vb-sheet-analyze runs the full long-term analysis.
+- Unit tests tests/test_optiiq_nine_unit.py (17 pass).
+- needs_retesting: false (iteration_35 + test_iter38 13/13 after board recompute fix)

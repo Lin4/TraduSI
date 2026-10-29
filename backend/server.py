@@ -32,7 +32,7 @@ from market import (
     UNIVERSE, UNIVERSE_INDEX, fetch_stock_bundle, get_quote, get_candles,
     sma as calc_sma, rsi as calc_rsi, support_resistance, detect_candle_patterns, detect_chart_patterns,
 )
-from market import get_capex_history, get_earnings, get_metrics, get_quarterly_financials, get_peers
+from market import get_earnings, get_metrics, get_quarterly_financials, get_peers
 import extras
 import billing
 import tradier
@@ -40,12 +40,13 @@ import chain
 import strategies
 import broadcasts
 import valuation_board
-from valuation_board import fill_balance_gaps, optiiq_sector, buy_plan, MODEL_V, FIN_FIELDS
+from valuation_board import fill_balance_gaps, optiiq_sector, buy_plan, is_current, MODEL_V, FIN_FIELDS
 from engine import (
     STRATEGIES, STRATEGY_META, PROFILES, ACCOUNT_TYPES, EXP_DAYS, MIN_POP_FLOOR, CREDIT_VARIANTS, LEVEL_NAMES, user_options_level,
     volatility_profile, build_idea, default_filters, passes, candidate_strategies, compact,
-    trade_plan, price_scenarios, dcf_valuation, default_dcf_inputs, optiiq_value, apply_fit, apply_history, management_plan,
+    trade_plan, price_scenarios, dcf_valuation, default_dcf_inputs, apply_fit, apply_history, management_plan,
 )
+from optiiq import optiiq_value
 import quant
 import market
 import signup
@@ -714,11 +715,7 @@ def optiiq_brief(o: Dict[str, Any], bp: Dict[str, Any]) -> str:
         head = f"OptiIQ Value (intrinsic value) not available: {o.get('reason')}."
     else:
         head = f"OptiIQ Value (intrinsic value) ${o['value']} = {o['upside_pct']:+}% vs price"
-        if o.get("model") == "dcf":
-            d, g, m = o.get("discount") or {}, o.get("growth") or {}, o.get("margin") or {}
-            head += (f" (10y revenue-driven DCF, WACC {d.get('wacc', 0) * 100:.1f}%, revenue growth {g.get('year1', 0) * 100:.1f}% in year 1 "
-                     f"fading {g.get('fade', 0) * 100:.0f}% a year toward {g.get('terminal', 0) * 100:.1f}%, EBIT margin "
-                     f"{m.get('initial', 0) * 100:.1f}% toward {m.get('stable', 0) * 100:.1f}%)")
+        head += " (average of " + ", ".join(f"{m['short']} ${m['value']}" for m in o.get("methods") or [] if m.get("value") is not None) + ")"
         head += ", low confidence." if o.get("confidence") == "low" else "."
     lv = "; ".join(f"{l['label']} ${l['price']} ({l['below_price_pct']}%, {l.get('strength', '')})" for l in bp.get("levels") or [])
     return f"{head} Buy levels: {lv or 'none'}. {bp.get('summary') or ''}"
@@ -776,7 +773,7 @@ async def stock_analysis(req: StockAnalysisReq, authorization: Optional[str] = H
         )
     else:
         metrics = bundle.get("metrics") or {}
-        stored = await db.valuation_board.find_one({"_id": tk}, {"metrics": 1, "financials": 1, "estimates": 1, "capex_history": 1, "model_v": 1}) or {}
+        stored = await db.valuation_board.find_one({"_id": tk}, {"metrics": 1, "financials": 1, "estimates": 1, "model_v": 1}) or {}
         live_metrics = bool(metrics.get("market_cap"))
         if not live_metrics and stored.get("metrics"):  # provider rate-limited: last stored copy from the valuation board
             metrics = stored["metrics"]
@@ -787,10 +784,9 @@ async def stock_analysis(req: StockAnalysisReq, authorization: Optional[str] = H
         async with httpx.AsyncClient() as client:
             try:
                 financials = await get_quarterly_financials(client, tk, 8)
-                capex_hist = await get_capex_history(client, tk)
             except Exception as ex:
                 logger.warning(f"financials {tk}: {ex}")
-                financials, capex_hist = [], []
+                financials = []
             history = await get_candles(client, tk, 504)  # ~2 years for the buy-level chart
         if len(history) < len(candles):
             history = candles
@@ -805,21 +801,20 @@ async def stock_analysis(req: StockAnalysisReq, authorization: Optional[str] = H
         if live_ok:  # keep the last complete inputs, so a rate-limited provider doesn't blank (or skew) the value later
             await db.optiiq_inputs.update_one({"_id": tk}, {"$set": {
                 "metrics": metrics, "financials": [{k: r.get(k) for k in FIN_FIELDS} for r in financials[-4:]],
-                "estimates": estimates, "capex_history": capex_hist, "model_v": MODEL_V, "ts": time.time()}}, upsert=True)
+                "estimates": estimates, "model_v": MODEL_V, "ts": time.time()}}, upsert=True)
         else:
             saved = await db.optiiq_inputs.find_one({"_id": tk}) or {}
             for doc in (saved, stored):  # last complete copy from Analyze, else the valuation board
-                if doc.get("model_v") == MODEL_V and doc.get("metrics") and doc.get("financials"):
+                if is_current(doc) and doc.get("financials"):
                     metrics = metrics if live_metrics else doc["metrics"]
                     model_fins = [dict(r) for r in doc["financials"]]
                     fill_balance_gaps(model_fins, metrics, price)
                     estimates = estimates or doc.get("estimates") or []
-                    capex_hist = capex_hist or doc.get("capex_history") or []
                     live_ok = True
                     break
         if live_ok:
             optiiq = optiiq_value(price, metrics, model_fins, optiiq_sector(tk, bundle.get("sector") or UNIVERSE_INDEX.get(tk, {}).get("sector")), tk,
-                                  estimates, capex_hist)
+                                  estimates)
         else:  # rate-limited with no complete saved copy: say so rather than value the company on partial data
             optiiq = {"available": False, "reason": "Company filings are temporarily unavailable. Try again in a minute."}
         iv_line = (optiiq["value"], "OptiIQ Value") if optiiq.get("available") and optiiq.get("confidence") != "low" else (None, None)

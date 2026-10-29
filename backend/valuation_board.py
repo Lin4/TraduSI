@@ -15,12 +15,12 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 import httpx
-from fastapi import Header
+from fastapi import Header, HTTPException
 from pymongo import UpdateOne
 
 import market
 import tradier
-from engine import optiiq_value
+from optiiq import optiiq_value
 
 SP500: List[Dict[str, str]] = json.loads((Path(__file__).parent / "data" / "sp500.json").read_text())
 SP500_INDEX = {s["ticker"]: s for s in SP500}
@@ -36,10 +36,16 @@ FUND_TTL = 86400.0        # fundamentals refresh once a day
 RETRY_TTL = 3600.0        # stocks with missing data are retried after an hour
 BOARD_FINNHUB_CAP = 30    # board pauses while the last minute's Finnhub calls exceed this (budget 55/min)
 PRICE_EVERY = 600
-MODEL_V = 7               # OptiIQ model version the stored inputs were collected for (+ same-quarter growth, own capex history)
+MODEL_V = 8               # OptiIQ model version the stored inputs were collected for (average of 9 valuation methods)
 FIN_FIELDS = ("label", "end_date", "fiscal_year", "fiscal_quarter", "revenue", "operating_income", "dep_amort", "sbc", "capex",
               "free_cash_flow", "operating_cash_flow", "net_income", "cash", "cash_and_investments", "total_debt", "equity",
               "receivables", "inventory", "payables", "deferred_revenue")
+
+
+def is_current(doc: Dict[str, Any]) -> bool:
+    """Stored inputs are complete for this model. An older app version sharing the database can rewrite a doc's metrics
+    without the 10-year mean multiples (and keeps model_v), so the metric itself is checked too."""
+    return doc.get("model_v") == MODEL_V and "mean_years" in (doc.get("metrics") or {})
 
 
 def bucket_of(premium: float) -> str:
@@ -73,12 +79,15 @@ def fill_balance_gaps(financials: List[Dict[str, Any]], metrics: Dict[str, Any],
         last["equity_estimated"] = True
 
 
-def evaluate(doc: Dict[str, Any], price: float) -> Dict[str, Any]:
+def optiiq_of(doc: Dict[str, Any], price: float) -> Dict[str, Any]:
     rows = [dict(r) for r in doc.get("financials") or []]
     metrics = doc.get("metrics") or {}
     fill_balance_gaps(rows, metrics, price)
-    o = optiiq_value(price, metrics, rows, doc.get("sector") or "", doc.get("ticker") or doc.get("_id") or "", doc.get("estimates"),
-                     doc.get("capex_history"))
+    return optiiq_value(price, metrics, rows, doc.get("sector") or "", doc.get("ticker") or doc.get("_id") or "", doc.get("estimates"))
+
+
+def evaluate(doc: Dict[str, Any], price: float) -> Dict[str, Any]:
+    o = optiiq_of(doc, price)
     if not o.get("available") or o.get("confidence") == "low":
         why = o.get("reason") or "Value is far from the price (unusual inputs), so it isn't grouped"
         return {"price": round(price, 2), "value": None, "premium": None, "bucket": None, "reason": why}
@@ -296,14 +305,12 @@ def register(api_router, *, db, get_user: Callable, send_push: Callable, market_
         metrics = await market.get_metrics(client, tk)
         fins = await market.get_quarterly_financials(client, tk, 8) if metrics.get("market_cap") else []
         earnings = await market.get_earnings(client, tk) if metrics.get("market_cap") else {}
-        capex_hist = await market.get_capex_history(client, tk) if fins else []
         if not price:
             price = ((await market.get_quote(client, tk)) or {}).get("price")
         doc: Dict[str, Any] = {
             "ticker": tk, "name": s["name"], "sector": s["sector"], "metrics": metrics,
             "financials": [{k: r.get(k) for k in FIN_FIELDS} for r in fins[-4:]],
             "estimates": earnings.get("estimates") or [],
-            "capex_history": capex_hist,
             "model_v": MODEL_V,
             "fund_ts": time.time() - (FUND_TTL - RETRY_TTL if not (metrics.get("market_cap") and fins) else 0),
         }
@@ -318,8 +325,8 @@ def register(api_router, *, db, get_user: Callable, send_push: Callable, market_
             try:
                 now = time.time()
                 # stocks saved by an older OptiIQ model are refreshed first, with the inputs the current model needs
-                seen = {d["_id"]: d.get("fund_ts", 0) if d.get("model_v") == MODEL_V else 0
-                        async for d in col.find({}, {"fund_ts": 1, "model_v": 1})}
+                seen = {d["_id"]: d.get("fund_ts", 0) if is_current(d) else 0
+                        async for d in col.find({}, {"fund_ts": 1, "model_v": 1, "metrics.mean_years": 1})}
                 todo = sorted((s for s in SP500 if now - seen.get(s["ticker"], 0) > FUND_TTL), key=lambda s: seen.get(s["ticker"], 0))
                 if todo:
                     async with httpx.AsyncClient() as client:
@@ -344,7 +351,7 @@ def register(api_router, *, db, get_user: Callable, send_push: Callable, market_
                 async with httpx.AsyncClient() as client:
                     prices = await tradier.quotes(client, [s["ticker"] for s in SP500])
                 ops = [UpdateOne({"_id": d["_id"]}, {"$set": {**evaluate(d, prices[d["_id"]]), "price_ts": time.time()}})
-                       async for d in col.find({"metrics": {"$exists": True}, "model_v": MODEL_V}) if prices.get(d["_id"])]
+                       async for d in col.find({"model_v": MODEL_V, "metrics.mean_years": {"$exists": True}}) if prices.get(d["_id"])]
                 if ops:
                     await col.bulk_write(ops, ordered=False)
                     cache.clear()
@@ -408,7 +415,12 @@ def register(api_router, *, db, get_user: Callable, send_push: Callable, market_
         hit = cache.get("board")
         if hit and time.time() - hit[0] < 60:
             return hit[1]
-        rows = await col.find({}, {"_id": 0, "metrics": 0, "financials": 0}).to_list(1000)
+        rows = await col.find({}, {"_id": 0, "capex_history": 0}).to_list(1000)
+        for r in rows:  # recomputed from the stored inputs, so the list always matches the stock sheet
+            if r.get("price") and is_current(r):
+                r.update(evaluate(r, r["price"]))
+            elif r.get("price"):
+                r.update({"bucket": None, "reason": "Valuation is being updated"})
         stocks = sorted(({"t": r["ticker"], "n": r["name"], "s": r["sector"], "p": r["price"], "v": r["value"],
                           "d": r["premium"], "b": r["bucket"]} for r in rows if r.get("bucket")), key=lambda x: x["d"])
         counts = {b["id"]: 0 for b in BUCKETS}
@@ -423,11 +435,23 @@ def register(api_router, *, db, get_user: Callable, send_push: Callable, market_
             "sectors": sorted({s["sector"] for s in SP500}),
             "progress": {"valued": len(rows), "total": len(SP500)},
             "prices_at": datetime.fromtimestamp(stamp("price_ts"), tz=timezone.utc).isoformat() if stamp("price_ts") else None,
-            "method": "Premium = price ÷ OptiIQ Value − 1, the same intrinsic-value model as Analyze → Long-term. "
+            "method": "Premium = price ÷ OptiIQ Value − 1. OptiIQ Value is the average of 9 valuation methods (cash-flow, earnings, "
+                      "average-multiple and growth models), the same as Analyze → Long-term. Tap a stock to see all 9. "
                       "Company numbers refresh daily, prices every 10 minutes. Research only, not investment advice.",
         }
         cache["board"] = (time.time(), out)
         return out
+
+    @api_router.get("/valuation/board/{ticker}")
+    async def valuation_board_stock(ticker: str, authorization: Optional[str] = Header(default=None)):
+        """One stock's 9-method valuation chart from the board's stored company data (no provider calls)."""
+        await get_user(authorization)
+        tk = ticker.upper().strip()
+        doc = await col.find_one({"_id": tk})
+        if not doc or not doc.get("price") or not is_current(doc):
+            raise HTTPException(status_code=404, detail="This stock's valuation is still being prepared")
+        return {"ticker": tk, "name": doc.get("name"), "sector": doc.get("sector"), "price": doc["price"],
+                "price_ts": doc.get("price_ts"), "optiiq": optiiq_of(doc, doc["price"])}
 
     return {"fundamentals_loop": fundamentals_loop, "price_loop": price_loop, "price_alert_loop": price_alert_loop,
             "check_price_alerts": check_price_alerts}

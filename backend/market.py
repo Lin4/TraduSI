@@ -300,7 +300,17 @@ async def get_metrics(client: httpx.AsyncClient, ticker: str) -> Dict[str, Any]:
         "operating_margin_ttm": m.get("operatingMarginTTM"),
         "operating_margin_annual": m.get("operatingMarginAnnual"),
         "operating_margin_5y": m.get("operatingMargin5Y"),
+        "ocf_ps_ttm": m.get("cashFlowPerShareTTM"),
     }
+    # OptiIQ multiple methods: the company's own average P/E, P/S and P/B over its last 10 fiscal years
+    # (loss years and P/E above 200 -- near-zero earnings -- carry no meaningful multiple and are skipped)
+    ann = (data.get("series") or {}).get("annual") or {}
+    years: Dict[str, int] = {}
+    for k, cap in (("pe", 200.0), ("ps", 1e9), ("pb", 1e9)):
+        vals = [p["v"] for p in (ann.get(k) or [])[:10] if isinstance(p.get("v"), (int, float)) and 0 < p["v"] <= cap]
+        result[f"{k}_mean_10y"] = round(sum(vals) / len(vals), 4) if vals else None
+        years[k] = len(vals)
+    result["mean_years"] = years
     _cache_set(key, result)
     return result
 
@@ -355,35 +365,6 @@ def _report_items(rep: Dict[str, Any]) -> Dict[str, float]:
     return items
 
 
-def _capex_history(annual: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Fiscal-year revenue and capex from 10-K filings, oldest -> newest (the company's own long-run capex level)."""
-    out = {}
-    for rep in annual:
-        items = _report_items(rep)
-        rev, cx = _pick(items, _FIN_CONCEPTS["revenue"]), _pick(items, _FIN_CONCEPTS["capex"])
-        if cx is None:  # company-specific tags, e.g. nvda_PurchasesOfPropertyAndEquipmentAndIntangibleAssets
-            cx = next((float(v) for c, v in items.items() if ("PurchasesOfPropertyAndEquipment" in c or "PaymentsToAcquirePropertyPlantAndEquipment" in c)
-                       and "Financ" not in c), None)
-        if rep.get("year") and rev and rev > 0 and cx is not None:
-            out.setdefault(int(rep["year"]), {"year": int(rep["year"]), "revenue": rev, "capex": abs(cx)})
-    return [out[y] for y in sorted(out)]
-
-
-async def get_capex_history(client: httpx.AsyncClient, ticker: str) -> List[Dict[str, Any]]:
-    """Annual revenue + capex history (filled by get_quarterly_financials from the same 10-K call, else fetched)."""
-    key = f"hist:{ticker}"
-    hit = _cache_get(key, 86400.0)
-    if hit is not None:
-        return hit
-    annual = await _get(client, "https://finnhub.io/api/v1/stock/financials-reported",
-                        {"symbol": ticker, "freq": "annual", "token": FINNHUB_KEY})
-    if annual is None:
-        return _stale(key) or []
-    out = _capex_history(annual.get("data") or [])
-    _cache_set(key, out)
-    return out
-
-
 async def get_quarterly_financials(client: httpx.AsyncClient, ticker: str, n: int = 3) -> List[Dict[str, Any]]:
     """Last n fiscal quarters from SEC filings (Finnhub as-reported). 10-Q flow items are
     year-to-date, so each quarter = YTD(q) - YTD(q-1); Q4 = annual 10-K - Q3 YTD."""
@@ -397,8 +378,6 @@ async def get_quarterly_financials(client: httpx.AsyncClient, ticker: str, n: in
         return _stale(key) or []
     annual = await _get(client, "https://finnhub.io/api/v1/stock/financials-reported",
                         {"symbol": ticker, "freq": "annual", "token": FINNHUB_KEY}) or {}
-    if annual.get("data"):
-        _cache_set(f"hist:{ticker}", _capex_history(annual["data"]))
     rows: Dict[tuple, Dict[str, Any]] = {}
     for rep, is_annual in [(r, False) for r in data.get("data") or []] + [(r, True) for r in (annual.get("data") or [])[:2]]:
         q = 4 if is_annual else int(rep.get("quarter") or 0)

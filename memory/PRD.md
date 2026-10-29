@@ -258,3 +258,10 @@ Research-first, transparent, trust-driven AI intelligence platform. AI acts as a
 - Track record: weekly calibration report (live.weekly), picks store pop_calibrated.
 - Discover: sort (OptiScore / history win rate / lowest trading cost / chance of profit) + filters (min score, low cost only), saved on device; cost badge on cards.
 - OptiScore breakdown: idea.drivers per pillar (points vs neutral 50, add up to the pillar), tap a pillar in the OptiScore card.
+
+## Update (Oct 2026) - OptiIQ Value v8 finished: average of 9 methods (OracleValue-style)
+- backend/optiiq.py: DCF-20, DFCF-20, DNI-20, DFCF-Terminal, Mean PS, Mean PE, Mean PB (company's own 10-year mean multiples), PSG, PEG; plain average of available methods, zero/negative values count. User decisions: keep all 9 methods for banks/insurers too; Mean PS stays the plain 10-year average (recent IPOs may show no value).
+- Board migration to model 8 complete: 498/503 (FDXF, FOX, HONA, VYLR, ECHO have no filings -> unrated).
+- The published app (old v4 code) shares the Atlas valuation_board and overwrote values. Preview hardening: GET /valuation/board recomputes every stock from stored inputs; valuation_board.is_current() also requires metrics.mean_years, so docs rewritten by old code are refreshed. Live app shows new values only after the user re-publishes.
+- OptiIQChart: dashed price/value lines drawn only across each bar.
+- Tests: tests/test_optiiq_nine_unit.py (17), tests/test_iter38_optiiq_nine_api.py (13) pass.

@@ -14,7 +14,8 @@ import { useTTS, useSTT } from "@/src/voice";
 import { colors, spacing, radius, themedStyles, useTheme } from "@/src/theme";
 import { PlanGate, usePlan } from "@/src/plans";
 import { ACCOUNTS, Chips, Label, OptionInsights, accountLabel } from "@/src/screen";
-import { FinancialsChart, ValuationMeasures, PeerComparison, BalanceSheet, OptiIQCard } from "@/src/financials";
+import { FinancialsChart, ValuationMeasures, PeerComparison, BalanceSheet } from "@/src/financials";
+import { OptiIQChart } from "@/src/OptiIQChart";
 import { OptiScoreCard, PlanCard, ValidationCard, ScanCard, PipelineStrip } from "@/src/quality";
 import { money } from "@/src/quantcharts";
 import { AskAIButton } from "@/src/ChatParts";
@@ -555,7 +556,7 @@ function LongForm({ r }: { r: any }) {
         <Badge text={r.verdict || "HOLD"} kind={r.verdict === "BUY" ? "success" : r.verdict === "SELL" ? "error" : "warn"} />
         {r.confidence ? <Badge text={`${r.confidence} conf.`} kind="info" /> : null}
       </View>
-      <OptiIQCard o={r.optiiq} />
+      <OptiIQChart o={r.optiiq} />
       <BuyLevelsChart r={r} />
       <ValuationEditor r={r} />
       <Text style={styles.sectionLabel}>Fundamentals</Text>
