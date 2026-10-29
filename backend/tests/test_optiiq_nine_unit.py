@@ -1,7 +1,7 @@
 """OptiIQ Value = plain average of 9 valuation methods (optiiq.py)."""
 import pytest
 
-from optiiq import optiiq_value, beta_rate, stage_rates, METHODS
+from optiiq import optiiq_value, beta_rate, stage_rates, METHODS, CASH_FLOW_KEYS
 
 PRICE = 100.0
 
@@ -81,6 +81,19 @@ class TestNineMethods:
         o = optiiq_value(PRICE, metrics(revenue_growth_ttm=-20.0, revenue_growth_5y=-20.0, eps_growth_5y=-20.0, revenue_growth_q_yoy=-20.0), [])
         assert by_key(o)["peg"] == 0.0
         assert o["inputs"]["growth"]["years_1_5"] == pytest.approx(-0.10)
+
+    @pytest.mark.parametrize("ticker,sector", [("JPM", "Financials"), ("TRV", "Financials"), ("ZION", "Banking"), ("KNSL", "Insurance")])
+    def test_banks_and_insurers_skip_cash_flow_methods(self, ticker, sector):
+        o = optiiq_value(PRICE, metrics(), [], sector, ticker)
+        v = by_key(o)
+        assert all(v[k] is None for k in CASH_FLOW_KEYS) and o["count"] == 5 and o["bank_or_insurer"]
+        assert all(m["skipped"] == (m["key"] in CASH_FLOW_KEYS) for m in o["methods"])
+        assert o["value"] == pytest.approx((120 + 100 + 100 + 120 + 50) / 5, abs=0.01)
+
+    @pytest.mark.parametrize("ticker,sector", [("V", "Financials"), ("CME", "Financials"), ("AON", "Financials"), ("AAPL", "Technology")])
+    def test_other_companies_keep_nine(self, ticker, sector):
+        o = optiiq_value(PRICE, metrics(), [], sector, ticker)
+        assert o["count"] == 9 and not o["bank_or_insurer"]
 
     def test_average_below_zero_unavailable(self):
         o = optiiq_value(PRICE, metrics(eps_ttm=-5.0, pcf_ttm=-20.0, pfcf_ttm=-10.0, book_value_per_share_q=-10.0, revenue_growth_5y=-5.0,

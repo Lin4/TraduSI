@@ -437,6 +437,7 @@ def register(api_router, *, db, get_user: Callable, send_push: Callable, market_
             "prices_at": datetime.fromtimestamp(stamp("price_ts"), tz=timezone.utc).isoformat() if stamp("price_ts") else None,
             "method": "Premium = price ÷ OptiIQ Value − 1. OptiIQ Value is the average of 9 valuation methods (cash-flow, earnings, "
                       "average-multiple and growth models), the same as Analyze → Long-term. Tap a stock to see all 9. "
+                      "Banks and insurers skip the 4 cash-flow models and average the other 5. "
                       "Company numbers refresh daily, prices every 10 minutes. Research only, not investment advice.",
         }
         cache["board"] = (time.time(), out)

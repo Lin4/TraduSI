@@ -13,6 +13,7 @@ Growth methods:
   8. PSG: mean P/S x sales per share x (projected growth / the company's own 5-year sales growth)
   9. PEG: EPS x fair P/E, where fair P/E = growth % + dividend yield % (Peter Lynch, PEG = 1)
 OptiIQ Value = sum of the 9 values / number of methods that could be calculated. Zero and negative values count.
+Banks and insurers skip methods 1-4 (deposits, loans and insurance float swing their cash flow), so they average methods 5-9.
 """
 from __future__ import annotations
 
@@ -32,6 +33,20 @@ METHODS = [
     ("psg", "Price to Sales Growth (PSG) Ratio", "PSG"),
     ("peg", "Price to Earnings Growth (PEG) Ratio Without NRI", "PEG"),
 ]
+CASH_FLOW_KEYS = ("dcf20", "dfcf20", "dni20", "dfcf_terminal")
+# S&P 500 banks (commercial, regional, custody, investment and card banks) and insurers. The GICS "Financials" sector also
+# holds payment networks, exchanges, rating agencies, asset managers and insurance brokers; those keep all 9 methods.
+BANKS_INSURERS = {
+    "BAC", "C", "CFG", "COF", "FITB", "HBAN", "JPM", "KEY", "MTB", "PNC", "RF", "TFC", "USB", "WFC", "SYF", "AXP",
+    "BNY", "NTRS", "STT", "GS", "MS", "SCHW", "RJF",
+    "ACGL", "AFL", "AIG", "AIZ", "ALL", "CB", "CINF", "EG", "GL", "HIG", "L", "MET", "PFG", "PGR", "PRU", "TRV", "WRB",
+}
+
+
+def is_bank_or_insurer(ticker: str, sector: str) -> bool:
+    """Listed S&P 500 names, otherwise the data provider's industry (e.g. "Banking", "Insurance")."""
+    s = (sector or "").lower()
+    return ticker.upper() in BANKS_INSURERS or "bank" in s or "insurance" in s
 
 
 def _clamp(x: float, lo: float, hi: float) -> float:
@@ -192,14 +207,21 @@ def optiiq_value(price: float, metrics: Dict[str, Any], financials: List[Dict[st
         "psg": psg(),
         "peg": peg(),
     }
+    fin = is_bank_or_insurer(ticker, sector)
+    if fin:
+        for key in CASH_FLOW_KEYS:
+            calc[key] = (None, "Skipped for banks and insurers: deposits, loans and insurance float make cash flow a poor guide to value")
     methods = []
     for key, label, short in METHODS:
         v, note = calc[key]
         methods.append({"key": key, "label": label, "short": short, "value": round(v, 2) if v is not None else None,
-                        "vs_price_pct": round((v / price - 1) * 100, 1) if v is not None else None, "note": note})
+                        "vs_price_pct": round((v / price - 1) * 100, 1) if v is not None else None, "note": note,
+                        "skipped": fin and key in CASH_FLOW_KEYS})
     vals = [m["value"] for m in methods if m["value"] is not None]
-    base = {"price": round(price, 2), "model": "nine", "methods": methods, "count": len(vals),
-            "method": ("OptiIQ Value = the average of 9 valuation methods: 4 discounted cash-flow / earnings models (20-year and terminal), "
+    base = {"price": round(price, 2), "model": "nine", "methods": methods, "count": len(vals), "bank_or_insurer": fin,
+            "method": ("OptiIQ Value (bank / insurer) = the average of the company's own 10-year average P/S, P/E and P/B and the PSG and PEG "
+                       "growth ratios; the 4 cash-flow models are skipped. Zero and negative results count." if fin else
+                       "OptiIQ Value = the average of 9 valuation methods: 4 discounted cash-flow / earnings models (20-year and terminal), "
                        "the company's own 10-year average P/S, P/E and P/B, and the PSG and PEG growth ratios. Zero and negative results count."),
             "inputs": {"growth": {"years_1_5": round(g1, 6), "years_6_10": round(g2, 6), "years_11_20": round(g3, 6),
                                   "terminal": min(TERMINAL_GROWTH, g2), "inputs": growth_inputs},

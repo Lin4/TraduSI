@@ -4,7 +4,7 @@ import Svg, { Line } from "react-native-svg";
 
 import { colors, spacing, radius, themedStyles, useTheme } from "./theme";
 
-type Method = { key: string; label: string; short: string; value: number | null; vs_price_pct: number | null; note: string };
+type Method = { key: string; label: string; short: string; value: number | null; vs_price_pct: number | null; note: string; skipped?: boolean };
 
 const usd = (v: number) => `${v < 0 ? "−" : ""}$${Math.abs(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const TRACK_H = 14;
@@ -67,7 +67,7 @@ export function OptiIQChart({ o }: { o: any }) {
                   accessibilityRole="button" accessibilityState={{ expanded: isOpen }} style={s.method}>
                   <View style={s.mHead}>
                     <Text style={s.mLabel} numberOfLines={2}>{m.label} <Text style={s.mShort}>({m.short})</Text></Text>
-                    <Text testID={`optiiq-method-${m.key}-value`} style={[s.mValue, { color: has ? col : colors.muted }]}>{has ? usd(m.value as number) : "n/a"}</Text>
+                    <Text testID={`optiiq-method-${m.key}-value`} style={[s.mValue, { color: has ? col : colors.muted }]}>{has ? usd(m.value as number) : m.skipped ? "Skipped" : "n/a"}</Text>
                   </View>
                   <View style={s.track}>
                     {has && (m.value as number) > 0 ? <View style={[s.fill, { width: x(m.value as number), backgroundColor: col }]} /> : null}
@@ -88,7 +88,8 @@ export function OptiIQChart({ o }: { o: any }) {
             })}
           </View>
           <Text style={s.foot}>
-            Average of {o.count} method{o.count === 1 ? "" : "s"}; zero and negative results count. Tap a method to see how it&apos;s worked out.
+            Average of {o.count} method{o.count === 1 ? "" : "s"}; zero and negative results count.
+            {o.bank_or_insurer ? " Banks and insurers skip the 4 cash-flow methods." : ""} Tap a method to see how it&apos;s worked out.
             {g ? ` Growth ${(g.years_1_5 * 100).toFixed(1)}% (years 1–5), ${(g.years_6_10 * 100).toFixed(1)}% (6–10), ${(g.years_11_20 * 100).toFixed(1)}% (11–20)` : ""}
             {o.inputs?.discount_rate ? ` · discount rate ${(o.inputs.discount_rate * 100).toFixed(1)}% (beta ${o.inputs.beta != null ? Number(o.inputs.beta).toFixed(2) : "n/a"}).` : ""}
           </Text>
